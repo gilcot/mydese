@@ -52,18 +52,18 @@ _at_t() {
 
 # ask for choice within passed items
 # $@: items to choose from, in order
-# $_c: result (i.e. choice...)
+# $_c: result (i.e. choice number...)
 _c=0
 _select() {
     _i=0
-    for _m in 'none' "$@"
+    for _item in 'none' "$@"
     do
         if test $_w -ne 0
         then
            printf "\033[44;37m\t%d\t%*s\033[0m\n" \
-               $_i "-$(( _w - 16 ))" "$_m"
+               $_i "-$(( _w - 16 ))" "$_item"
         else
-            printf "\t%d\t%s\n" $_i "$_m"
+            printf "\t%d\t%s\n" $_i "$_item"
         fi
         _i=$(( _i+1 ))
     done
@@ -75,6 +75,18 @@ _select() {
         printf " choice:\t"
     fi
     read -r _c
+    _c=$(( _c ))
+}
+
+# check if one of the commands is in path
+# (retur with success at first found)
+# $@: commands to check for, in order
+_cmd_ok() {
+    for _item in $@
+    do
+        command -v $_item && return
+    done
+    #return 1
 }
 
 # alias for recurrent commands
@@ -104,8 +116,6 @@ _instalf() {
     done
 }
 
-##### let's proceed now ###
-
 
 _at_p "checking"
 
@@ -115,7 +125,7 @@ test $( id -u ) -eq 0 || exit 1
 
 # Following commands are used before packages installation
 # (except for DMIDecode, but it may not be in your default list)
-for _c in readlink dirname hostname apt-get dmidecode
+for _c in readlink dirname hostname apt-get dmidecode dpkg awk
 do
     _at_t "$_c in path"
     command -v $_c || exit 1
@@ -124,6 +134,33 @@ done
 # so I won't repeat myself later
 _dir="$( readlink -fns "$( dirname $0 )" )"
 _dom="$( hostname -d )"
+_def="Favorite "
+
+_dpl="$( dpkg --get-selections | awk '{print $1}' )"
+#_dpl="$( dpkg-query -W -f '${package}\n' )"
+# see if a package of a list is installed,
+# and if none of them, make a selection list
+# $@: items to choose from, in order
+# $_p: result (i.e. package selected)
+_p=''
+_debsel() {
+    _p=''
+    for _item in $@
+    do
+        echo "$_dpl" | grep -s -w $_item && return
+    done
+    _old="$IFS" IFS="
+" _sel=$( for _item in $@
+    do
+        apt-cache search -n ^$_item$
+    done)
+    _select $_sel
+    IFS=$_old
+    if test $_c -ne 0
+    then
+        _p=$( echo $@ | awk -v N=$_c '{print $N}' )
+    fi
+}
 
 
 _at_p "update system"
@@ -167,9 +204,9 @@ then
 else
     # I should keep that list as small as possible, as I have Ansible
     # playbooks to add and configure some other stuffs when required.
-    for _p in ssh sshpass sudo vim gnupg-agent pwgen cowsay mtr \
-        cpm screen byobu vim git tig ca-certificates linuxlogo \
-        cifs-utils lsb-release gpm shelldap ldap-utils sl jq rlpr
+    # question: should I add in the list: rlfe 
+    for _p in ssh sshpass sudo gnupg-agent pwgen cowsay mtr gpm rlpr jq \
+        ca-certificates linuxlogo cifs-utils smbclient lsb-release sl
     do
         _at_t "$_p"
         $agi $_p
@@ -215,6 +252,7 @@ case $_virt in
         _p=''
         ;;
 esac
+unset _virt
 if test -n "$_p"
 then
     _at_t "$_p"
@@ -375,50 +413,50 @@ else
         "Cloudscale / Foreman / NetBox / Online / Scaleway / Ansible Tower / Oracle VirtualBox / vultr" \
         #"Proxmox VE" 
     case $_c in
-        1)
+        1|amazon)
             # https://docs.ansible.com/latest/plugins/inventory/aws_ec2.html
             # https://docs.ansible.com/latest/plugins/inventory/aws_rds.html
             _p='boto3 botocore'
             ;;
-        2)
+        2|azure)
             # https://docs.ansible.com/latest/plugins/inventory/azure_rm.htl
             _p='azure>=2.0.0'
             ;;
-        3)
+        3|docker)
             # https://docs.ansible.com/latest/plugins/inventory/docker_swarm.html
             _p='docker'
             ;;
-        5)
+        5|gitlab)
             # https://docs.ansible.com/latest/plugins/inventory/gitlab_runners.html
             _p='python-gitlab>=1.8.0'
             ;;
-        4)
+        4|google)
             # https://docs.ansible.com/latest/plugins/inventory/gcp_compute.html
             _p='google-auth>=1.3.0'
             ;;
-        6)
+        6|hcloud)
             # https://docs.ansible.com/latest/plugins/inventory/hcloud.html
             _p='hcloud-python>=1.0.0'
             ;;
-        7)
+        7|openshift)
             # https://docs.ansible.com/latest/plugins/inventory/k8s.html
             # https://docs.ansible.com/latest/plugins/inventory/kubevirt.html
             # https://docs.ansible.com/latest/plugins/inventory/openshift.html
             _p='openshift>=0.6'
             ;;
-        8)
+        8|openstack)
             # https://docs.ansible.com/latest/plugins/inventory/openstack.html
             _p='openstacksdk'
             ;;
-        9)
+        9|linode)
             # https://docs.ansible.com/latest/plugins/inventory/linode.html
             _p='linode_api4>=2.0.0'
             ;;
-        10)
+        10|nmap)
             # https://docs.ansible.com/latest/plugins/inventory/nmap.html
             # Wheezy has all those (and their libs) as dependencies to nmap :o
             _p=''
-            for _i in \
+            for _item in \
                 gsfonts \
                 ghostscript \
                 gnuplot-nox \
@@ -429,17 +467,17 @@ else
                 imagemagick \
                 nmap
             do
-                _at_p "$_i"
-                $agi $_i
+                _at_p "$_item"
+                $agi $_item
             done
             ;;
-        11)
+        11|vmware)
             # https://docs.ansible.com/latest/plugins/inventory/vmware_inventory.html
             # pyvmomi uses: requests and six (installed with Ansible)
             # requests uses: certifi chardet idna urllib3
             _p='urllib3[secure] idna chardet certifi requests pyvmomi'
             ;;
-        12)
+        12|windows)
             # https://docs.ansible.com/ansible/latest/user_guide/windows_winrm.html
             for _i in krb5-user libkrb5-dev python-dev
             do
@@ -510,203 +548,374 @@ else
 fi
 
 
-_at_p "install web browser"
-if ! command -v elinks &&
-    ! command -v links2 &&
-    ! command -v netrik &&
-    ! command -v links &&
-    ! command -v lynx &&
-    ! command -v w3m
+_at_p "$_def SSH cluster"
+# Despite the word cluster, those have nothing to do with: cman 
+# See http://taktuk.gforce.inria.fr/ for TakTuk and Kanif
+# I no longer use them since I've switched to Ansible... See
+# - http://manpages.org/ansible-console
+# - https://docs.ansible.com/ansible/latest/cli/ansible-console.html
+# - https://blog.linuxserver.io/2018/02/09/q-quick-intro-to-ansible-console/
+# - https://yobriefca.se/blog/2017/01/10/ansible-console-an-interactive-repl-for-ansible/
+# - https://blog.james-carr.org/a-read-eval-print-loop-for-ansible-4f16f266a3d6
+_debsel 'dish' 'dsh' 'mussh' 'pconsole' 'pssh' 'sinfo' 'sslh' 'taktuk'
+test "$_p" = 'taktuk' &&
+    _p='taktuk kanif'
+test -n "$_p" &&
+    $agi "$_p"
+
+
+_at_p "$_def term. multiplexer"
+# console equivalent of: xpra disper
+_debsel 'screen' 'tmux' 'byobu' 'dtach'
+test -n "$_p" &&
+    $agi "$_p"
+
+
+_at_p "$_def text editor"
+# by default, 'nano-tiny' and 'vim-tiny' are installed.
+# install full 'nano' and 'vim'  in order to have all features.
+# question: should I separe line editors from screen editors?
+_debsel 'alpine-pico' 'ed' 'elvis-console' 'emacs23-nox' 'emacs24-nox' \
+    'fte-console' 'fte-terminal' 'jed' 'joe' 'jove' 'jupp' 'le' 'ledit' \
+    'levee' 'mcedit' 'mg' 'nano' 'ne' 'nvi' 'vile' 'vim-nox' 'vim-basic' 'vim'
+test -n "$_p" &&
+    $agi "$_p"
+
+
+_at_p "$_def grep alternative"
+_debsel 'ripgrep' 'ack-grep' 'sgrep' 'agrep' 'grepcidr'
+test -n "$_p" &&
+    $agi "$_p"
+
+
+_at_p "$_def revision system"
+_debsel 'bzr' 'cvs' 'cssc' 'darcs' 'easygit' 'git' 'mercurial' 'rcs' \
+    'rabitvcs-cli' 'subversion' 'tla'
+case $_p in
+    bzr)
+        _p="$_p bzr-grep bzr-search bzr-stats bzr-rewrite commit-patch"
+        command -v git >/dev/null &&
+            _p="$_p bzr-fastimport bzr-git git-bzr tailor"
+        command -v svn >/dev/null &&
+            _p="$_p bzr-fastimport bzr-svn tailor"
+        command -v cvs >/dev/null &&
+            _p="$_p cvs2svn"
+        # for server, install also: bzr-email bzr-upload bzr-xmloutput  loggerhead trac-bzr
+        ;;
+    cvs)
+        _p="$_p curves"
+        command -v bzr >/dev/null &&
+            _p="$_p cvs2svn tailor"
+        command -v git >/dev/null &&
+            _p="$_p cvs2svn tailor"
+        command -v svn >/dev/null &&
+            _p="$_p cvs2svn tailor"
+        # for server, install also: viewvc viewvc-query
+        ;;
+    darcs)
+        _p="$_p darcsum"
+        command -v bzr </dev/null &&
+            _p="$_p bzr-fastimport commit-patch tailor"
+        # for server, install also: darcsweb darcs-monitor
+        ;;
+    easygit|git)
+        _p="$_p tig"
+        command -v hg >/dev/null &&
+            _p="$_p mercurial-git tailor"
+        command -v bzr >/dev/null &&
+            _p="$_p bzr-git git-bzr tailor"
+        command -v emacs >/dev/null &&
+            _p="$_p magit"
+        command -v cvs >/dev/null &&
+            _p="$_p cvs2svn"
+        # heavy users may add also: legit stgit topgit
+        ;;
+    mercurial)
+        _p="$_p hgview-curses mercurial-nested"
+        command -v git >/dev/null &&
+            _p="$_p mercurial-git hg-fast-export tailor"
+        # for server, install also: mercurial-server trac-mercurial
+        ;;
+    rcs)
+        _p="$_p rcs-blame"
+        ;;
+    subversion)
+        command -v hg >/dev/null &&
+            _p="hgsubversion hgsvn tailor"
+        _p="$_p svn2cl"
+        command -v git >/dev/null &&
+            _p="$_p git-svn tailor"
+        command -v bzr >/dev/null &&
+            _p="$_p bzr-fastimport bzr-svn tailor"
+        command -v cvs >/dev/null &&
+            _p="$_p cvs2svn tailor"
+        # for server, install also: subversion-tools statsvn svn-load svn-workbench websvn viewvc viewvc-query pepper
+        ;;
+esac
+test -n "$_p" &&
+    $agi "$_p"
+
+
+_at_p "$_def multi repos tool"
+_debsel 'mr' 'myrepos' 'moap'
+test -n "$_p" &&
+    $agi "$_p"
+
+
+_at_p "$_def LDAP browser"
+# not to confuse with things like: gosa lat ldap2(dns|zone) phamm
+# those are more like (but console): jxplorer ldapadmin
+_debsel 'cpu' 'ldaptor-utils' 'ldap-utils' 'ldapvi' 'shelldap'
+test -n "$_p" &&
+    $agi "$_p"
+
+
+_at_p "$_def calendaring tool"
+# also consider: birthday dates gcalcli email-reminder ical2html leave mhc-utils pcal taglog vpim
+# and: hebcal itools jcal
+# and: cycle mencal pcalendar
+_debsel 'ccal' 'calcurse' 'gcal' 'pal' 'remind' 'when' 'wyrd'
+test -n "$_p" &&
+    $agi "$_p"
+
+
+_at_p "$_def DOS convert"
+_debsel 'flip' 'dos2unix'
+test -n "$_p" &&
+    $agi "$_p"
+
+
+_at_p "$_def passwords manager"
+if ! _cmd_ok kpcli.pl pwman3 kpcli upass kedpm pwman \
+ pass cpm ph
 then
     _select \
-        "elinks" \
-        "elinks-lite" \
-        "links" \
-        "links2" \
-        "lynx" \
-        "lynx-cur" \
-        "netrik" \
-        "surfraw" \
-        "w3m"
+        "cpm - Curse based Password Manager using PGP encryption, in C" \
+        "gopass - Pass-store read-only nice interface in Go"
+        "kedpm - KED's Figaro Password Manager client in Python" \
+        "kpcli - KeePassX command line interface in PERL" \
+        "kpclix - KeePassX client in PERL, with Xclip support" \
+        "pass - Pass-store: directories based password manager with PGP, in C" \
+        "passhole - KeePass client in Python, with Pass-store looklike" \
+        "passmgr  - Simple portable password manager, in Go" \
+        "pwman3 - Lightweiht command line password manager which can use different databases" \
+        "ripasso - Passwords-store read-only nice interface in Rust" \
+        "upass - Pass-store friendly interface in Python" \
+        "ylva - Command line password manager, in C" \
+        # etc.
     case $_c in
-        1)
-            _p='elinks'
+        1|cpm)
+            # http://freshmeat.sourceforge.net/projects/cpm
+            # https://packages.debian.org/search?keyword=kedpm
+            $agi libc6 libcdk6 libcrack2 libdotconf0 libgpg-error0 libgpgme11 libncursesw5 libtinfo5 libxml2 libxml2-utils zlib1g cpm
             ;;
-        2)
-            _p='elinks-lite'
+        2|gopass)
+            # beware, distro Go compiler may be outdate
+            # https://linuxize.com/post/how-to-install-go-on-debian-9/
+            # https://tecadmin.net/install-go-on-debian/
+            command -v go >/dev/null || $agi golang-go
+            # https://github.com/cortex/gopass
+            go get github.com/go-qml/qml
+            go get github.com/limetext/qml-go
+            go get github.com/cortex/gopass
             ;;
-        3)
-            _p='links'
+        3|kedpm)
+            # http://kedpm.sourceforge.net/
+            # https://packages.debian.org/search?keyword=kedpm
+            $agi python-crypto kedpm
             ;;
-        4)
-            _p='links2'
+        4|kpcli)
+            # http://kpcli.sourceforge.net
+            # https://github.com/tnbut/kpcli
+            # https://github.com/alecsammon/kpcli
+            # either https://www.cpan.org/modules/INSTALL.html
+            #$agi libcpan-distnameinfo-perl liblocal-lib-perl libtry-tiny-perl
+            #$agi cpanminus
+            #cpan -i Data::Password Crypt::Rijndael Sort::Naturally \
+                #Term::Readkey Term::ShullUI Capture::Tiny File::Keepass \
+                #Math::Random::ISAAC
+            # or system packages
+            $agi libdata-password-perl \
+                libcrypt-rijndael-perl libsort-naturally-perl \
+                libterm-readkey-perl libterm-shellui-perl \
+                libcapture-tiny-perl libfile-keepass-perl \
+                libmath-random-isaac-perl libmath-random-isaac-xs-perl
+            # then
+            # (last check shows no change since december 2017 for version
+            # 3.2 at https://sourceforge.net/projects/kpcli/files/ but I
+            # prefere downloading from source to 'cause package not always
+            # available or not at latest version:
+            # https://manpages.debian.org/jessie/kpcli/kpcli.1.en.html 2.7-1
+            # https://manpages.debian.org/strecth/kpcli/kpcli.1.en.html 3.1-3
+            mkdir /usr/local/bin &&
+                wget https://raw.githubusercontent.com/alecsalmmon/kpcli/master/kpcli.pl \
+                -q -c -O /usr/local/bin/kpcli
             ;;
-        5)
-            _p='lynx'
+        5|kpclix)
+            # https://github.com/caian-org/kpclix
+            # either https://www.cpan.org/modules/INSTALL.html
+            #$agi libcpan-distnameinfo-perl liblocal-lib-perl libtry-tiny-perl
+            #$agi xclip cpanminus
+            #cpan -i Data::Password Crypt::Rijndael Sort::Naturally \
+                #Term::Readkey Term::ShullUI Capture::Tiny File::Keepass \
+                #Math::Random::ISAAC
+            # or system packages
+            $agi xclip cmake libdata-password-perl \
+                libcrypt-rijndael-perl libsort-naturally-perl \
+                libterm-readkey-perl libterm-shellui-perl \
+                libcapture-tiny-perl libfile-keepass-perl \
+                libmath-random-isaac-perl libmath-random-isaac-xs-perl
+            # then
+            git clone https://github.com/caian-org/kpclix.git &&
+                cd kpclix && make install
             ;;
-        6)
-            _p='lynx-cur'
+        6|pass)
+            # https://www.passwordstore.org/
+            # https://packages.debian.org/search?keyword=pass
+            $agi xclip gnupg2 tree pass
             ;;
-        7)
-            _p='netrik'
+        7|passhole)
+            # https://github.com/Evidlo/passhole
+            $agi gcc libgpgme-dev python3-dev
+            $epi kdbxpasswordpwned passhole
             ;;
-        8)
-            _p='surfraw'
+        8|passmgr)
+            # beware, distro Go compiler may be outdate
+            # https://www.digitalocean.com/community/tutorial/how-to-install-go-on-debian-8
+            # https://www.digitalocean.com/community/tutorial/how-to-install-go-on-debian-9
+            command -v go >/dev/null || $agi golang-go
+            # https://github.com/urld/passmgr
+            $agi xsel libxmu-dev libxmu6 libxmuu1
+            go get github.com/atotto/clipboard
+            go get github.com/bgentry/speakeasy
+            go get golang.org/x/crypto/scrypt
+            go get github.com/urld/passmgr/cmd/passmgr
             ;;
-        9)
-            _p='w3m'
+        9|pwman3|pwman)
+            # https://github.com/pwman3/pwman3
+            # https://packages.debian.org/search?keyword=pwman3
+            # note that if a RDBMS isn't installed with the biding
+            # python-mysqldb or python-pygresql it should use SQLite3
+            #$agi python-colorama python-crypto pwman3
+            $epi pwman3
             ;;
-        *)
-            _p=''
+        10|ripasso)
+            # https://github.com/gycos/cursive/wiki/install-ncurses
+            # https://vfoley.xyz/rust-compile-speed-ups/
+            # https://github.com/cortex/ripasso
+            #$agi libgtk-3-dev qtdeclaratives-dev libqt5svg5-dev
+            $agi libncursesws-dev cmake cargo
+            mkdir /usr/local/{src,bin} &&
+                cd /usr/local/src &&
+                git clone https://github.com/cortex/ripasso.git &&
+                cd ripasso &&
+                cargo clean &&
+                #cargo check &&
+                cargo build -p ripasso-cursive --out-dir /usr/local/bin
+                #cargo install
+            ;;
+        11|upass)
+            # https://github.com/Kwpolska/upass
+            $epi urwid pyperclip upass
+            ;;
+        12|titan|ylva)
+            # https://github.com/nrosvall/titan
+            # https://github.com/nrosvall/ylva
+            $agi libsqlite0-dev libsqlite-tcl libssl-dev cmake gcc
+            mkdir /usr/local/src &&
+                cd /usr/local/src &&
+                git clone https://github.com/nrosvall/titan.git &&
+                cd titan &&
+                make && make install
             ;;
     esac
-    test -n "$_p" &&
-        $agi "$_p"
 fi
 
 
-_at_p "install mail-n-news client"
+_at_p "$_def web browser"
+_debsel 'elinks' 'elinks-lite' 'links' 'links2' \
+    'lynx' 'lynx-cur' 'netrik' 'surfraw' 'w3m'
+test -n "$_p" &&
+    $agi "$_p"
+
+
+_at_p "$_def mail-n-news client"
 # NotMuch can be used standalone... or with a front-end:
 # https://wiki.archlinux.org/index.php/Notmuch lists them
-if ! command -v notmuch-emacs-mua &&
-    ! command -v sup-mail &&
-    ! command -v notmuch &&
-    ! command -v s-nail &&
-    ! command -v alpine &&
-    ! command -v mailx &&
-    ! command -v pine &&
-    ! command -v mutt &&
-    ! command -v cone &&
-    ! command -v mail
+# Some listed alternatives won't show unless repository was registered
+# https://www.neomutt.org/distro.html
+_debsel 'alpine' 'cone' 'mutt' 'bsd-mailx' 'heirloom-mailx' \
+    'mailutils' 's-nail' 'notmuch-mutt' 'neomutt' 'alot' \
+    'sup-mail' 'notmuch-vim' 'elpa-notmuch' 'bower' 'ner' \
+    'trn4' 'suck' # those 2 laters may requier inn or inn2 server
+# explicit dependencies and additional packages
+if test "$_p" = 'mutt'
 then
-    _select \
-        "Alpine" \
-        "cone" \
-        "Mutt" \
-        "BSD mailx" \
-        "Heirloom mailx" \
-        "GNU mail utils" \
-        "S-nail" \
-        "Notmuch-mutt" \
-        "NeoMutt" \
-        "Alot" \
-        "Sup-mail" \
-        "Notmuch-vim" \
-        "elpa-Notmuch" \
-        "Bower" \
-        "Notmuch Email Reader" \
-        #"what else?" \
-    case $_c in
-        1)
-            _p='alpine'
-            ;;
-        2)
-            _p='cone'
-            ;;
-        3)
-            _p='mutt mutt-profiles'
-            ;;
-        4)
-            _p='bsd-mailx'
-            ;;
-        5)
-            _p='heirloom-mailx'
-            ;;
-        6)
-            _p='mailutils'
-            ;;
-        7)
-            _p='s-nail'
-            ;;
-        8)
-            _p='notmuch mutt mutt-profiles notmuch-mutt'
-            ;;
-        9)
-            # https://www.neomutt.org/distro.html
-            _p='neomutt'
-            ;;
-        10)
-            _p='notmuch alot'
-            ;;
-        11)
-            _p='ruby-chronic ruby-highline ruby-locale ruby-lockfile ruby-rubymail ruby-mime-types ruby-trollop ruby-unicode ruby-xapian sup-mail'
-            ;;
-        12)
-            _p='ruby-mail vim-nox vim-addon-manager ruby-notmuch notmuch notmuch-vim'
-            ;;
-        13)
-            _p='emacsen-common elpa-notmuch'
-            ;;
-        14)
-            _p='python3 python3-configobj python3-notmuch python3-magic python3-gpg alot'
-            ;;
-        15)
-            # here in fact, we need to download and compile
-            # https://gitthub.com/wangp/bower
-            _p='bower'
-            ;;
-        16)
-            # here in fact, we need to download and compile
-            # https://gitthub.com/pioto/ner
-            _p='ner'
-            ;;
-        *)
-            _p=''
-            ;;
-    esac
-    test -n "$_p" &&
+    _p='mutt mutt-profiles'
+elif test "$_p" = 'notmuch-mutt'
+then
+    _p='notmuch mutt mutt-profiles notmuch-mutt'
+elif test "$_p" = 'alot'
+then
+    _p='notmuch alot'
+elif test "$_p" = 'sup-mail'
+then
+    _p='ruby-chronic ruby-highline ruby-locale ruby-lockfile ruby-rubymail ruby-mime-types ruby-trollop ruby-unicode ruby-xapian sup-mail'
+elif test "$_p" = 'notmuch-vim'
+then
+    _p='ruby-mail vim-nox vim-addon-manager ruby-notmuch notmuch notmuch-vim'
+elif test "$_p" = 'elpa-notmuch'
+then
+    _p='emacsen-common elpa-notmuch'
+elif test "$_p" = 'alot'
+then
+    _p='python3 python3-configobj python3-notmuch python3-magic python3-gpg alot'
+# Here, in fact, we'll need to download and compile
+# https://www.neomutt.org/distro.html
+# https://gitthub.com/pioto/ner
+#else
+fi
+test -n "$_p" &&
+    $agi "$_p"
+# we'll also need one of: getmail4 fetchmail gpgv gpgv2 MTA-relay
+# also consider packages: pdfgrep mboxgrep grepmail t-prot
+# for the dark side of the force: pst-utils readpst
+
+
+_at_p "$_def file manager"
+if ! command -v ranger
+then
+    _debsel 'lfm' 'vifm' 'ranger' 'mc'
+    if test "$_p" = 'ranger'
+    then
+        # img2txt is found in caca-utils
+        # pdfto(cairo|html|ppm|ps|text) are found in popler-utils
+        # exiftool is found in libimage-exiftool-perl or libimage-info-perl
+        $agi caca-utils popler-utils atool libimage-exiftool-perl
+        #$agi ranger
+        $epi ranger-fm
+    elif test -n "$_p"
+    then
         $agi "$_p"
-    # we'll also need one of: getmail4 fetchmail MTA-relay
+    fi
 fi
 
 
-_at_p "install file manager"
-if ! command -v ranger &&
-    ! command -v vifm &&
-    ! command -v lfm &&
-    ! command -v mc
-then
-    _select \
-        "lfm: Ligthweigh File Manager" \
-        "vifm: File Manager with vi keybing" \
-        "ranger: File Manager in Python" \
-        "mc: Midnight Commander" \
-        #"add yours" 
-    case $_c in
-        1)
-            $agi lfm
-            ;;
-        2)
-            $agi vifm
-            ;;
-        3)
-            $agi img2txt atool pdftotext exiftool
-            #$agi ranger
-            $epi ranger-fm
-            ;;
-        4)
-            $agi mc
-            ;;
-    esac
-fi
-
-
-_at_p "install cheat manager"
-if ! command -v cheat &&
-    ! command -v cheat-ext
+_at_p "$_def cheat manager"
+if ! _cmd_ok cheat cheat-ext
 then
     _select \
         "cheat/cheat" \
         "chhsiao90/cheat-ext" \
         "jahendrie/cheat"
     case $_c in
-        1)
+        1|cheat)
             $epi cheat
             ;;
-        2)
+        2|chhsiao90)
             $epi cheat-ext
             ;;
-        3)
+        3|jahendrie)
         # We could use trick from https://gist.github.com/jwebcat/5122366
         # and https://unix.stackexchange.com/a/421576
         #wget --no-check-certificate --content-disposition \
@@ -717,8 +926,9 @@ then
             git clone -q https://github.com/jahendrie/cheat.git &&
                 cd cheat || break
         # Also need to have 'make' installed... Let's do it manually
-            PREFIX=/usr
-            MANPATH="$PREFIX/share/man1"
+            PREFIX=/usr/local
+            #PREFIX=/usr
+            MANPATH="$PREFIX/share/man/man1"
             MANFILE=cheat.1.gz
             DATAPATH="$PREFIX/share/cheat"
             install -D -m 0755 "src/cheat.sh"  "$PREFIX/bin/cheat" &&
@@ -730,6 +940,14 @@ then
             ;;
     esac
 fi
+
+
+_at_p "$_def dotfiles manager"
+# beware, for RCM, be sure to add the repository before
+# look at instructions at https://github.com/thoughbot/rcm
+_debsel 'rcm' 'stow' 'vcsh' 'xstow' 'git-annex'
+test -n "$_p" &&
+    $agi "$_p"
 
 
 _at_p "install extra P packages"
