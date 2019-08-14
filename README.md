@@ -59,7 +59,7 @@ sh pic.sh
 Well, but what if you have different needs? Easy: before launching the
 script, prepare one of those files:
   - two files for specific things related to the organisation
-    - `$foo$domainname$bah.list`: specific source lists to add
+    - `*.list`: specific source lists to add
     - `$domainname.setup`: shell commands source before other processing
   - two files to override default packages installation
     - `all.deb.lst`: list of system packages to install

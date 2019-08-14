@@ -169,7 +169,7 @@ _at_p "update system"
 # note that this can be done later with Ansible
 _at_t "site extra sources lists"
 find $_dir \
-    -name "*${_dom:-localnet}.list" \
+    -name '*.list' \
     -exec cp -nuv {} /etc/apt/sources.list.d/ \;
 
 # Alternatively, you may use the following to add setting
