@@ -1,0 +1,7 @@
+## the Yarn package manager
+#######################################################
+# wget -qO- https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
+# curl -sL https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
+
+deb https://dl.yarnpkg.com/debian/ stable main
+

@@ -1,5 +1,7 @@
 # https://github.com/thoughtbot/rcm
 #######################################################
-# wget -qO - https://apt.thoughoutbot.com/thoughtbot.gpg.key | sudo apt-key add -
+# wget -qO- https://apt.thoughoutbot.com/thoughtbot.gpg.key | sudo apt-key add -
+# curl -sL https://apt.thoughoutbot.com/thoughtbot.gpg.key | sudo apt-key add -
+
 deb https://apt.thoughoutbot.com/debian/ stable main
 

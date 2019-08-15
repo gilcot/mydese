@@ -1,0 +1,6 @@
+# https://github.com/porras/tlcr
+#######################################################
+# apt-key adv --keyserver keys.gnupg.net --recv-keys ED2715FE
+
+deb http://iamserg.io/deb packages main
+

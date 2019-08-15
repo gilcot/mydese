@@ -52,7 +52,7 @@ That's the purpose of this script. It usage is very simple:
 # be sure to switch to root first, e.g:
 su -
 # download the script second, e.g:
-wget https://github.com/gilcot/mydese/raw/master/pic.sh
+wget https://raw.githubusercontent.com/gilcot/mydese/master/pic.sh
 # launch the script at last, e.g:
 sh pic.sh
 ```
@@ -80,6 +80,6 @@ if you need a specific version instead of the latest, add it to the
 name with the packages manager syntax.
 
 Last words: Known alternatives are provided for some console programms.
-(I use any X application, and won't include things not in standard
+(I don't use any X application, and won't include things not in standard
 repositories.)
 
