@@ -8,56 +8,69 @@
 # Put things I used to add to my De(bi|vu)an box
 # everytime I create a new box, I use to perfom those setings
 
+
 ## global variables
 _c=0    # changed by _select()
 _p=''   # changed by _debsel()
 
-## constants
-# Debian installed Packages List ; used by _debsel()
-_dpl="$( dpkg --get-selections | awk '{print $1}' )"
-# Script Directory Name ; used by _installf() and elsewhere
-_sdn="$( readlink -fns "$( dirname $0 )" )"
-# domain name ;
-_dom="$( hostname -d )"
+## constants: fixed strings
 # start of many strings used with _at_p()
 _def="Favorite"
-# Where Is that Command: POSIX alternative to "which" ;
-# replaces "type -f" (or "-a") or even "whereis -b"
-_wic="command -v"
-# Get this URL Link
-# ...okay, not shorter than "wget" or "curl" but with rigth options
-_gul="wget -q -c -nD --random-wait --waitretry=3 -T 9 -t 3 --no-check-certificate "
-# alias for Apt-Get Install to avoid retyping everytime
-# -qq or -q=2 implies -y that is tempered with --trivial-only
-agi="apt-get -qq --trivial-only install"
-# alias for an Easy Python package Install to avoid retyping everytime
-epi="pip -qq --retries 2 --timeout 7 install"
-# alias for an Easy Ruby package Install to avoid retyping everytime
-eri="$_wic gem >/dev/null || $agi ruby ; gem install"
 # end of many strings used with _at_p()
 _man=" Manager"
 # end of some strings used with _at_p()
 _bro=" Browser"
 # for TL;DR community driven commands helps
 _nlr=" client for https://tldr.ostera.io"
+
+## constants: directories paths
 # Installation Base Directory, a.k.a PREFIX
 _ibd=/usr/local
-# Prefixed Binaries Directory, i.ee $PREFIX/bin
-_pbd="$_ibd/bin"
-# Prefixed Data Directory, i.ee $PREFIX/share
-_pdd="$_ibd/share"
-# Prefixed Sources Directory, i.ee $PREFIX/src
-_psd="$_ibd/src"
+# install Binaries into $PREFIX/bin
+_ulb="$_ibd/bin"
+# download Sources into $PREFIX/src
+_uls="$_ibd/src"
+# put shared Data dir into $PREFIX/share
+_uld="$_ibd/share"
 # system width bashrc
 _brc=/etc/bash.bashrc
-# bash completions directory (D7
+# bash completions directory >D5
+# created by bash-completion package
 _bcd=/usr/share/bash-completion/completions
+
+## constants: commands aliases (3 letters)
+# Where Is that Command: POSIX alternative to "which" ;
+# replaces "type -f" (or "-a") or even "whereis -b"
+wic="command -v"
+# Get this URL Link
+# ...okay, not shorter than "wget" or "curl" but with rigth options
+gul="wget -q -c -nD --random-wait --waitretry=3 -T 9 -t 3 --no-check-certificate "
+# Make Directory full Path
+mdp="mkdir -pv"
+# alias for Apt-Get Install to avoid retyping everytime
+# -qq or -q=2 implies -y that is tempered with --trivial-only
+agi="apt-get -qq --trivial-only install"
+# alias for an Easy Python package Install to avoid retyping everytime
+epi="pip -qq --retries 2 --timeout 7 install"
+# alias for an Easy Ruby package Install to avoid retyping everytime
+eri="$wic gem >/dev/null || $agi ruby ; gem install"
+
+## constants: variant strings
+# Debian installed Packages List ; used by _debsel()
+_dpl="$( dpkg --get-selections | awk '{print $1}' )"
+# Script Directory Name ; used by _installf() and elsewhere
+_sdn="$( readlink -fns "$( dirname $0 )" )"
+# domain name ;
+_dom="$( hostname -d )"
+_dom="${dom:-localnet}"
+# host name ;
+_hos="$( hostname -s )"
 # for _at_? functions, set terminal's width
 # $_w: is 0 if term. can't handle colors,
 #      otherwise is known available columns
-if $_wic tput >/dev/null
+if $wic tput >/dev/null
 then
-    if $_wic stty >/dev/null
+    if $wic stty >/dev/null
     then
         _w="$( stty size | cut -d ' ' -f 2 )"
     else
@@ -75,7 +88,7 @@ fi
 _at_p() {
     if test $_w -ne 0
     then
-        printf "\033[44;37m => %*s\033[0m\n" \
+        printf "\033[44;36m => %*s\033[0m\n" \
             "-$(( _w - 4 ))" "$1"
     else
         echo " => $1"
@@ -127,7 +140,7 @@ _select() {
 _cmd_ok() {
     for _item in $@
     do
-        $_wic $_item && return
+        $wic $_item && return
     done
     #return 1
 }
@@ -162,12 +175,26 @@ _make_go() {
     # https://tecadmin.net/install-go-on-debian/
     # https://www.digitalocean.com/community/tutorial/how-to-install-go-on-debian-8
     # https://www.digitalocean.com/community/tutorial/how-to-install-go-on-debian-9
-    $_wic go >/dev/null || $agi golang-go
-    mkdir -pv "$_psd"
-    cd "$_psd"
+    if ! $wic go >/dev/null
+    then
+        $agi golang-go
+        # of course, change $GOROOT to installation directory
+        # (e.g. $PREFIX/go) if it's installed from sources
+        # https://linoxide.com/linux-how-to/install-go-ubuntu-linux-centos/
+        cat >/etc/profile.d/goenv.sh << EOF
+export GOROOT=/usr/lib/go
+export GOPATH="$HOME/go"
+export PATH="$PATH:$GOROOT/bin:$GOPATH/bin"
+EOF
+    fi
+    cd "$_uls"
+    export GOPATH="$_ibd"
     for _item in $@
     do
         go get $_item
+    done
+    for _item in $@
+    do
         go install $_item
     done
 }
@@ -179,7 +206,7 @@ _inst_ru() {
     # like D7, where we should go rustup prior
     # https://www.rust-lang.org/tools/install
     # https://github.com/rustup.rs/blob/master/README.rd
-    $_wic cargo >/dev/null ||
+    $wic cargo >/dev/null ||
         $agi cargo ||
         break
     for _item in $@
@@ -192,34 +219,13 @@ _inst_ru() {
 # $1: user_or_team_or_project/repository_id
 # $2: base site if not github.com
 _g_clone() {
-    $_wic git >/dev/null || $agi git
-    mkdir -pv "$_psd"
-    cd "$_psd"
+    $wic git >/dev/null || $agi git
+    cd "$_uls"
     git clone -q https://${2:-github.com}/$1.git &&
         cd $( basename $1 .git )
 }
 
-
-## main: let's process now
-
-
-_at_p "checking"
-
-# All the following actions should be performed as root
-_at_t "user is root"
-test $( id -u ) -eq 0 || exit 1
-# Downloads should occur in this directory, so let's swith here
-mkdir /$_ibd/src && cd /$_ibd/src
-
-# Following commands are used before packages installation
-# (except for DMIDecode, but it may not be in your default list)
-for _c in readlink dirname hostname apt-get dmidecode dpkg awk
-do
-    _at_t "$_c in path"
-    $_wic $_c || exit 1
-done
-
-#_dpl="$( dpkg-query -W -f '${package}\n' )"
+## choose a package to install in a group
 # see if a package of a list is installed,
 # and if none of them, make a selection list
 # $@: items to choose from, in order
@@ -239,42 +245,78 @@ _debsel() {
     IFS=$_old
     if test $_c -ne 0
     then
-        _p=$( echo $@ | awk -v N=$_c '{print $N}' )
+        _p=$( echo $_sel | awk -v N=$_c 'NR=$N {print $1}' )
     fi
+    unset _sel
+}
+
+## install a package from a group
+# $@: items to choose from, in order
+_dipick() {
+    _debsel $@
+    test -n "$_p" &&
+        $agi "$_p"
 }
 
 
-_at_p "update system"
+##########################################################################
+## main: let's process now
+
+
+_at_p "Initial Checks"
+
+# All the following actions should be performed as root
+_at_t "User is Root"
+id
+test $( id -u ) -eq 0 || exit 1
+
+_at_t "Commands in Path"
+# Following commands are used before packages installation
+for _item in readlink dirname hostname apt-get dpkg awk
+do
+    $wic $_item ||
+        {
+            echo "Cannot locate '$_item' within $PATH" >&2
+            exit 1
+        }
+done
+
+_at_t "Prepare Directoryes"
+$mdp $_bcd "$_uls"
+# Downloads should occur in this directory, so let's swith here
+cd "$_uls"
+
+
+_at_p "Update System"
 
 # Put client or other specific additions
 # note that this can be done later with Ansible
-_at_t "site extra sources lists"
-#find $_sdn \
-#    -name '*.list' \
-#    -exec cp -nuv {} /etc/apt/sources.list.d/ \;
+_at_t "Add Extra Sources Lists"
+find "$_sdn" -maxdepth 0 -name '*.list' \
+    -exec cp -nuv {} /etc/apt/sources.list.d/ \;
 
 # Alternatively, you may use the following to add setting
 # (e.g. files in /etc/profile.d/ /etc/apt/apt.conf.d/ and so)
 # if this is not relevant for the following (for example,
 # exporting http_proxy and https_proxy in the environment),
 # it's better to do it later via nice Ansible playbook
-if test -e "${_dom:-localnet}.setup"
+if test -e "$_dom.setup"
 then
-    _at_t "load site extra settings"
-    . "${_dom:-localnet}.setup"
+    _at_t "Load Site Extra Settings"
+    . "$_dom.setup"
 fi
 
 # Usefull if source list is changed before
 # Stop on network issue or if lists need to be fix...
-_at_t "refresh repositories data"
+_at_t "Refresh Repositories Data"
 apt-get -qq update || exit 2
 
 # Upgrade to correct latest
 # Also stop if the process went wrong...
-_at_t "refrest installed files"
+_at_t "Refrest Installed Files"
 apt-get -qq upgrade || exit 2
 
-_at_p "install additionnal D packages"
+_at_p "Install Additionnal System Packages"
 # ensure the following packages are there
 if test -e "$_sdn/all.deb.lst"
 then
@@ -286,22 +328,31 @@ else
     # I should keep that list as small as possible, as I have Ansible
     # playbooks to add and configure some other stuffs when required.
     # question: should I add in the list: rlfe 
-    for _p in ssh sshpass sudo gnupg-agent pwgen cowsay mtr gpm rlpr jq \
-        ca-certificates cifs-utils smbclient lsb-release sl
+    for _item in ssh sshpass gnupg-agent pwgen cowsay mtr gpm \
+        ca-certificates cifs-utils smbclient lsb-release rlpr sl
     do
-        _at_t "$_p"
-        $agi $_p
+        _at_t "$_item"
+        $agi $_item
     done
 fi
 
 # Install virtual machine additionals
-_virt="$( dmidecode -s system-product-name )"
-case $_virt in
-    'VirtualBox') # Sun/Oracle VirtualBox
+if $wic virt-what >/dev/null
+then
+    # https://people.redhat.com/~rjones/virt-what/virt-what.txt
+    _vmt="$( virt-what | head -n 1 )"
+elif $wic dmidecode >/dev/null
+then
+    _vmt="$( dmidecode -s system-product-name )"
+else
+    _vmt=''
+fi
+case $_vmt in
+    'VirtualBox'|'virtualbox') # Sun/Oracle VirtualBox
         # this is required to mount shared folders...
         _p='virtualbox-guest-dkms'
         ;;
-    'VMware Virtual Platform') # VMware Workstation
+    'VMware Virtual Platform'|'vmware') # VMware Workstation
         # tools and drivers for better experience and administration
         if test $( grep -o '[0-9]\.[0-9][0-9]*' /etc/debian_version |
             cut -d. -f1 ) -gt 5
@@ -313,8 +364,8 @@ case $_virt in
             # one have to go the hard way, and redo it on each kernel upgrade
             # https://www.debiantutorials.com/how-to-install-vmware-tools/
             # https://www.electrictoolbox.com/install-vmware-tools-debian-5/
-            _p="autoconf gcc-4.1* make psmisc linux-header-$(uname -r)"
-            #_p="autoconf gcc-4.3* make psmisc linux-header-$(uname -r)"
+            _p="autoconf gcc-4.1* make psmisc linux-header-$( uname -r )"
+            #_p="autoconf gcc-4.3* make psmisc linux-header-$( uname -r )"
         fi
         ;;
     'KVM') # QEmu with KVM
@@ -326,14 +377,14 @@ case $_virt in
     'Virtual Machine') # Microsoft VirtualPC
         _p=''
         ;;
-    'HVM domU') # Xen
+    'HVM domU'|'xen-dom[0U]'|'xen-hvm'|'xen') # Xen
         _p=''
         ;;
-    *) # Xen
+    *) # baremetal
         _p=''
         ;;
 esac
-unset _virt
+unset _vmt
 if test -n "$_p"
 then
     _at_t "$_p"
@@ -342,22 +393,20 @@ fi
 
 # Install specific packages to that host
 # note that this can be done later with Ansible
-if test -e "$_sdn/$( hostname -s).deb.lst"
-then
-    _instalf "$_sdn/$( hostname -s).deb.lst"
-fi
+test -e "$_sdn/$_hos.deb.lst" &&
+    _instalf "$_sdn/$_hos.deb.lst"
 
 # Now some clean up bfore going on
-_at_t "cleaning up"
+_at_t "Cleaning Up"
 apt-get autoremove --purge &&
     apt-get autoclean
 
 
-_at_p "set system configuration"
+_at_p "Misc. System Configuration"
 # some setings I used to
 
-_at_t "login banner"
-_debsel 'linuxlogo' 'neofetch' 'screenfetch'
+_at_t "Login Banner"
+_debsel 'linuxlogo' 'neofetch' 'screenfetch' 'sysvbanner'
 if test -n "$_p"
 then
     $agi "$_p"
@@ -390,8 +439,11 @@ then
                 _p="$_p -d '+distro;+kernel;-uptime;-pkgs;-shell;+cpu;+mem;+host' "
             fi
             ;;
+        sysvbanner)
+            _p="{ banner $_hos; uname -sr 2>/dev/null; uname -vm 2>/dev/null; }"
+            ;;
     esac
-    $_p >/etc/issue
+    eval "$_p" >/etc/issue
 fi
 
 _at_t "root bashrc"
@@ -400,9 +452,9 @@ then
     # As I'm sharing this on a public Git, let's give ability to have
     # something different from mine
     # So people won't need to patch my maintenance releases for that!
-    cat $_sdn/root_bashrc > /root/.bashrc
+    cat $_sdn/root_bashrc >/root/.bashrc
 else
-    cat > /root/.bashrc << 'EOF'
+    cat >/root/.bashrc << 'EOF'
 # ~/.bashrc: executed by bash(1) for non-login shells.
 
 # Note: PS1 and umask are already set in /etc/profile. You should not
@@ -449,12 +501,12 @@ alias mv='mv -vi'
 alias ln='ln -v'
 EOF
 fi
-    cat > /root/.profile << 'EOF'
+    cat >/root/.profile << 'EOF'
 # ~/.profile: executed by Bourne-compatible login shells.
 
 if [ "$BASH" ]; then
   if [ -f ~/.bashrc ]; then
-    . ~/.bashrc
+   . ~/.bashrc
   fi
 fi
 
@@ -462,16 +514,16 @@ mesg n
 EOF
 
 
-_at_p "setup Python packages$_man"
+_at_p "Setup Python Packages$_man"
 # Let's go beyong 'easy_install' but get the latest from source
 # (an "$agi python-pip" will leave us with an outdate version)
-if ! $_wic pip #>/dev/null
+if ! $wic pip #>/dev/null
 then
     # instructions from https://github.com/pypa/get-pip
-    _at_t "retrieve installer"
+    _at_t "Retrieve Installer"
     test -e get-pip.py ||
-        $_gul https://bootstrap.pypa.io/get-pip.py || exit 2
-    _at_t "installer pip: lastest"
+        $gul https://bootstrap.pypa.io/get-pip.py || exit 2
+    _at_t "Install pip:lastest"
     python get-pip.py || exit 2
 fi
 
@@ -479,11 +531,11 @@ if test -e "$_sdn/all.pip.lst"
 then
     # As I'm sharing this on a public Git, let's give ability to have
     # own default packages instead of always patching this script
-    _at_p "install common P packages"
+    _at_p "Install Common Python Packages"
     _instalf "$_sdn/all.pip.lst" "$epi"
 else
 
-    _at_p "install Ansible:base"
+    _at_p "Install Ansible:base"
     # I always use the latest stable that may not be available for old distro
     # Also, one may add the file /etc/apt/sources.list.d/ansible.list
     # with this content for example:
@@ -493,18 +545,17 @@ else
     # apt-add-repository ppa:ansible/ansible
     # cryptography-packaging
     # pyOpenSSL
-    if ! $_wic ansible #>/dev/null
+    if ! $wic ansible #>/dev/null
     then
-        for _p in \
+        for _item in \
             'PyYAML' \
             'MarkupSafe jinja2' \
             'pycparser cffi' \
             'six ipaddress enum34 cffi asn1crypto cryptography' \
             'ansible'
         do
-            _at_t "$_p"
-            $epi $_p
-            #$epi -U urllib3[secure] $_p # avoid switching to full URLlib
+            _at_t "$_item"
+            $epi $_item
         done
     fi
 
@@ -592,10 +643,10 @@ else
             ;;
         12|windows)
             # https://docs.ansible.com/ansible/latest/user_guide/windows_winrm.html
-            for _i in krb5-user libkrb5-dev python-dev
+            for _item in krb5-user libkrb5-dev python-dev
             do
-                _at_p "$_i"
-                $agi $_i
+                _at_p "$_item"
+                $agi $_item
             done
             # https://github.com/diyan/pywinrm
             # ipaddress library is only included by default in Python 3.x
@@ -619,7 +670,7 @@ else
         $epi $_p
     fi
 
-    _at_p "setup Ansible:extra"
+    _at_p "Install Ansible:extra"
     # graphes
     # https://univers-libre.net/posts/ansible-infrastructure-diagram.html
     # note that core now comes with ansible-inventory command with --graph
@@ -656,7 +707,7 @@ else
         ansible-lint \
         j2cli[yaml]
     do
-        if ! $_wic $_p
+        if ! $wic $_p
         then
             _at_t "$_p"
             $epi $_p
@@ -665,9 +716,33 @@ else
 fi
 
 
+_at_p "$_def Privileges Escalation$_man"
+_dipick 'calife' 'chiark-really' 'dpsyco-sudo' #'sudo'
+
+
+_at_p "$_def Commands Shell"
+# Most Linux distros install BASH as default.
+# Debian family also ship it's version of ASH
+# falselogin fbterm lshell rssh rush
+_dipick 'csh' 'fish' 'fizsh' 'ksh' 'mksh' 'mosh' 'pdksh' 'posh' \
+    'rc' 'sash' 'shtool' 'tcsh' 'yash' 'zsh' # 'bash' 'dash'
+
+
+_at_p "$_def Other Interpreter"
+# cl-launch
+_dipick 'bsh' 'bwbasic' 'ipython' 'jimsh' 'lush' 'php5-cli' 'scsh' 'tkcon'
+
+
 _at_p "$_def SSH cluster"
-# Despite the word cluster, those have nothing to do with: cman 
-# It's more similar to https://github.com/byjg/automate or ???
+# Despite the word cluster, those have nothing to do with:
+# broctl cman zeekctl csync2 ...
+# It's more similar to https://github.com/byjg/automate or Fabric
+# See http://www.fabfile.org/ about using Frabric! and also read:
+# - https://www.digitalocean.com/commutinty/tutorials/how-to-use-fabric-to-automate-administration-tasks-deployments
+# - https://docs.fabfile.org/en/1.11/tutorial.html
+# - https://nosarthur.github.io/coding/2019/05/16/deploy-fabric.html
+# - https://serversforhackers.com/c/deploying-with-fabric
+# etc. It's not included here 'cause it's better to get it via pip
 # See http://taktuk.gforce.inria.fr/ for TakTuk and Kanif
 # I no longer use them since I've switched to Ansible... See
 # - http://manpages.org/ansible-console
@@ -675,7 +750,8 @@ _at_p "$_def SSH cluster"
 # - https://blog.linuxserver.io/2018/02/09/q-quick-intro-to-ansible-console/
 # - https://yobriefca.se/blog/2017/01/10/ansible-console-an-interactive-repl-for-ansible/
 # - https://blog.james-carr.org/a-read-eval-print-loop-for-ansible-4f16f266a3d6
-_debsel 'dish' 'dsh' 'mussh' 'pconsole' 'pssh' 'sinfo' 'sslh' 'taktuk'
+_debsel 'clustershell' 'clusterssh' \
+    'dish' 'dsh' 'mussh' 'pconsole' 'pdsh' 'pssh' 'sinfo' 'sslh' 'taktuk'
 test "$_p" = 'taktuk' &&
     _p='taktuk kanif'
 test -n "$_p" &&
@@ -685,79 +761,71 @@ test -n "$_p" &&
 _at_p "$_def Term. Multiplexer"
 # console equivalent of: xpra disper
 # also consider gems to show a session in several terms.
-_debsel 'screen' 'tmux' 'byobu' 'dtach'
-test -n "$_p" &&
-    $agi "$_p"
+_dipick 'screen' 'tmux' 'elscreen' 'dtach' 'byobu'
 
 
 _at_p "$_def Text Editor"
 # by default, 'nano-tiny' and 'vim-tiny' are installed.
 # install full 'nano' and 'vim'  in order to have all features.
 # question: should I separe line editors from screen editors?
-_debsel 'alpine-pico' 'ed' 'elvis-console' 'emacs23-nox' 'emacs24-nox' \
+_dipick 'alpine-pico' 'ed' 'elvis-console' 'emacs23-nox' 'emacs24-nox' \
     'fte-console' 'fte-terminal' 'jed' 'joe' 'jove' 'jupp' 'le' 'ledit' \
     'levee' 'mcedit' 'mg' 'nano' 'ne' 'nvi' 'vile' 'vim-nox' 'vim-basic' 'vim'
-test -n "$_p" &&
-    $agi "$_p"
 
 
 _at_p "$_def grep alternative"
-_debsel 'ripgrep' 'ack-grep' 'sgrep' 'agrep' 'grepcidr' #'grep'
-test -n "$_p" &&
-    $agi "$_p"
+_dipick 'ripgrep' 'ack-grep' 'sgrep' 'agrep' 'grepcidr' #'grep'
 
 
-_at_p "$_def pager"
-_debsel 'less' 'more' 'most' 'pg'
-test -n "$_p" &&
-    $agi "$_p"
+_at_p "$_def Pager"
+_dipick 'less' 'more' 'most' 'pg'
 
 
-_at_p "$_def revision system"
+_at_p "$_def Revision System"
 _debsel 'bzr' 'cvs' 'cssc' 'darcs' 'easygit' 'git' 'mercurial' 'rcs' \
     'rabitvcs-cli' 'subversion' 'tla'
 case $_p in
     bzr)
         _p="$_p bzr-grep bzr-search bzr-stats bzr-rewrite commit-patch"
-        $_wic git >/dev/null &&
+        $wic git >/dev/null &&
             _p="$_p bzr-fastimport bzr-git git-bzr tailor"
-        $_wic svn >/dev/null &&
+        $wic svn >/dev/null &&
             _p="$_p bzr-fastimport bzr-svn tailor"
-        $_wic cvs >/dev/null &&
+        $wic cvs >/dev/null &&
             _p="$_p cvs2svn"
         # for server, install also: bzr-email bzr-upload bzr-xmloutput  loggerhead trac-bzr
         ;;
     cvs)
         _p="$_p curves"
-        $_wic bzr >/dev/null &&
+        $wic bzr >/dev/null &&
             _p="$_p cvs2svn tailor"
-        $_wic git >/dev/null &&
+        $wic git >/dev/null &&
             _p="$_p cvs2svn tailor"
-        $_wic svn >/dev/null &&
+        $wic svn >/dev/null &&
             _p="$_p cvs2svn tailor"
         # for server, install also: viewvc viewvc-query
         ;;
     darcs)
         _p="$_p darcsum"
-        $_wic bzr </dev/null &&
+        $wic bzr </dev/null &&
             _p="$_p bzr-fastimport commit-patch tailor"
         # for server, install also: darcsweb darcs-monitor
         ;;
     easygit|git)
         _p="$_p tig"
-        $_wic hg >/dev/null &&
+        $wic hg >/dev/null &&
             _p="$_p mercurial-git tailor"
-        $_wic bzr >/dev/null &&
+        $wic bzr >/dev/null &&
             _p="$_p bzr-git git-bzr tailor"
-        $_wic emacs >/dev/null &&
+        $wic emacs >/dev/null &&
             _p="$_p magit"
-        $_wic cvs >/dev/null &&
+        $wic cvs >/dev/null &&
             _p="$_p cvs2svn"
         # heavy users may add also: legit stgit topgit
         ;;
     mercurial)
         _p="$_p hgview-curses mercurial-nested"
-        $_wic git >/dev/null &&
+        $wic git >/dev/null &&
             _p="$_p mercurial-git hg-fast-export tailor"
         # for server, install also: mercurial-server trac-mercurial
         ;;
@@ -765,14 +833,14 @@ case $_p in
         _p="$_p rcs-blame"
         ;;
     subversion)
-        $_wic hg >/dev/null &&
+        $wic hg >/dev/null &&
             _p="hgsubversion hgsvn tailor"
         _p="$_p svn2cl"
-        $_wic git >/dev/null &&
+        $wic git >/dev/null &&
             _p="$_p git-svn tailor"
-        $_wic bzr >/dev/null &&
+        $wic bzr >/dev/null &&
             _p="$_p bzr-fastimport bzr-svn tailor"
-        $_wic cvs >/dev/null &&
+        $wic cvs >/dev/null &&
             _p="$_p cvs2svn tailor"
         # for server, install also: subversion-tools statsvn svn-load svn-workbench websvn viewvc viewvc-query pepper
         ;;
@@ -781,41 +849,37 @@ test -n "$_p" &&
     $agi "$_p"
 
 
-_at_p "$_def multi repos tool"
-_debsel 'mr' 'myrepos' 'moap'
-test -n "$_p" &&
-    $agi "$_p"
+_at_p "$_def Multi-Repos. Tool"
+_dipick 'mr' 'myrepos' 'moap'
 
 
 _at_p "$_def LDAP$_bro"
 # not to confuse with things like: gosa lat ldap2(dns|zone) phamm
 # those are more like (but console): jxplorer ldapadmin
-_debsel 'cpu' 'ldaptor-utils' 'ldap-utils' 'ldapvi' 'shelldap'
-test -n "$_p" &&
-    $agi "$_p"
+_dipick 'cpu' 'ldaptor-utils' 'ldap-utils' 'ldapvi' 'shelldap'
 
 
 _at_p "$_def Calendaring Tool"
 # also consider: birthday dates gcalcli email-reminder ical2html leave mhc-utils pcal taglog vpim
 # and: hebcal itools jcal
 # and: cycle mencal pcalendar
-_debsel 'ccal' 'calcurse' 'gcal' 'pal' 'remind' 'when' 'wyrd'
-test -n "$_p" &&
-    $agi "$_p"
+_dipick 'ccal' 'calcurse' 'gcal' 'pal' 'remind' 'when' 'wyrd'
 
 
 _at_p "$_def Tasks$_man"
-_debsel 'calcurse' 'devtodo' 'etm' 'hnb' 'org-mode' \
+_dipick 'calcurse' 'devtodo' 'etm' 'hnb' 'org-mode' \
     'tasque' 'tdl' 'task' 'tasks' 'todotxt-cli' 'tudu' \
     'ukolovnik' 'yagtd' 'yokadi' 'w2do'
-test -n "$_p" &&
-    $agi "$_p"
 
 
 _at_p "$_def DOS Files Converter"
-_debsel 'toffodos' 'flip' 'dos2unix'
-test -n "$_p" &&
-    $agi "$_p"
+_dipick 'toffodos' 'flip' 'dos2unix'
+
+
+_at_p "$_def JSON Tool"
+_dipick 'jparse' 'jq' \
+    'lua-json' 'php-service-json' 'ruby-json' 'ruby-multi-json' \
+    'python-anyjson' 'python-cjson' 'python-demjson' 'python-simple-json'
 
 
 _at_p "$_def Passwords$_man (PM)"
@@ -882,7 +946,7 @@ then
             # available or not at latest version:
             # https://manpages.debian.org/jessie/kpcli/kpcli.1.en.html 2.7-1
             # https://manpages.debian.org/strecth/kpcli/kpcli.1.en.html 3.1-3
-            $_gul -O $_pbd/kpcli \
+            $gul -O $_ulb/kpcli \
                 https://raw.githubusercontent.com/alecsalmmon/kpcli/master/kpcli.pl
             ;;
         5|kpclix)
@@ -929,16 +993,16 @@ then
             $agi haveged
             # is it possible to make it behave like a Password-store interface?
             # https://passpie.readthedocs.io/en/latest/configuration.html#partial-configuration-file
-            mkdir /etc/skel/.password-store
-            {
-                echo "path: ~/.password-store"
-                echo "homedir: ~/.gnupg"
-                echo "autopull: null"
-                echo "autopush: null"
-                echo "copy_timeout: 0"
-                echo "extension: .gpg"
-                echo 'genpass_pattern: "[a-z]{5} [-_+=#&%$#}{5} [A-Z]{5}"'
-            } >> /etc/skel/.passpierc
+            $mdp /etc/skel/.password-store
+            cat >/etc/skel/.passpierc << EOF
+path: ~/.password-store
+homedir: ~/.gnupg
+autopull: null
+autopush: null
+copy_timeout: 0
+extension: .gpg
+genpass_pattern: "[a-z]{5} [-_+=#&%$#}{5} [A-Z]{5}"
+EOF
             ;;
         10|pwman3|pwman)
             # https://github.com/pwman3/pwman3
@@ -958,7 +1022,7 @@ then
             _g_clone cortex/ripasso &&
                 cargo clean &&
                 #cargo check &&
-                cargo build -p ripasso-cursive --out-dir "$_pbd"
+                cargo build -p ripasso-cursive --out-dir "$_ulb"
                 #cargo install
             ;;
         12|upass)
@@ -973,7 +1037,7 @@ then
                 make && make install
             ;;
         14|bitwarden)
-            $_wic npm ||
+            $wic npm ||
                 $agi software-properties-common nodejs ||
                 break
             # https://github.com/bitwarden/cli
@@ -994,17 +1058,19 @@ then
             # https://learn.hashicorp.com/vault/getting-started/install
             $agi unzip
             _v=1.2.2 # version number at 2019-08-22
-            case $( uname -m ) in
-                'x86_64') _a='amd64' ;; # 64-bits
-                '') _a='386' ;; # 32-bits
-                '') _a='arm' ;; # Arm
-                '') _a='arm64' ;; # Arm64
+            # https://serverfault.com/a/63760
+            # https://stackoverflow.com/a/45125525
+            case $( uname -m 2>/dev/null ) in
+                'x86_64'|'amd64') _a='amd64' ;; # 64-bits
+                'i386'|'i686') _a='386' ;; # 32-bits
+                'arm') _a='arm' ;; # Arm
+                'aarch64'|'aarch64_be'|'armv8[bl]'|'arme[bl]') _a='arm64' ;; # Arm64
             esac
-            $_gul -O vault.zip \
+            $gul -O vault.zip \
                 https://releases.hachicorp.com/vault/$_v/vaul_${_v}_linux_${_a}.zip &&
                 unzip vault.zip && rm vault.zip &&
-                cd vault && mv vault "$_pbd/vault" &&
-                chmod a+x "$_pbd/vault" &&
+                cd vault && mv vault "$_ulb/vault" &&
+                chmod a+x "$_ulb/vault" &&
                 vault-autocomplete-install
             # create a service to start the server and export the key
             # https://learn.hashicorp.com/vault/getting-started/dev-server
@@ -1012,10 +1078,10 @@ then
         18|ratti)
             # https://github.com/tildaslash/RattiCli
             _g_clone tildaslash/RattiCli &&
-                ln -s rattic.py "$_pbd/rattic"
+                ln -s rattic.py "$_ulb/rattic"
             # https://github.com/tildaslash/RattiD
             _g_clone tildaslash/RattiD &&
-                mkdir -v "$_ibd/sbin" &&
+                $mdp "$_ibd/sbin" &&
                 ln -s RattiD.py "$_ibd/sbin/rattid"
             # https://github.com/tildaslash/RatticWeb
             _g_clone tildaslash/RatticWeb #&&
@@ -1025,11 +1091,9 @@ fi
 
 
 _at_p "$_def Web$_bro"
-_debsel 'elinks' 'elinks-lite' 'links' 'links2' \
+_dipick 'elinks' 'elinks-lite' 'links' 'links2' \
     'lynx' 'lynx-cur' 'netrik' 'surfraw' 'w3m' \
     'gopher'
-test -n "$_p" &&
-    $agi "$_p"
 
 
 _at_p "$_def Mails-n-News Client"
@@ -1076,9 +1140,9 @@ test -n "$_p" &&
 
 
 _at_p "$_def File$_bro"
-if ! $_wic ranger
+if ! $wic ranger
 then
-    _debsel 'lfm' 'vfu' 'vifm' 'ranger' 'mc'
+    _debsel 'clex' 'gnuit' 'gt5' 'lfm' 'vfu' 'vifm' 'ranger' 'mc'
     if test "$_p" = 'ranger'
     then
         # img2txt is found in caca-utils
@@ -1095,32 +1159,26 @@ fi
 
 
 _at_p "$_def FTP Client"
-_debsel 'aftp' 'git-ftp' 'ftp' 'ftpcopy' 'ftp-ssl' 'ftp-upload' \
+_dipick 'aftp' 'git-ftp' 'ftp' 'ftpcopy' 'ftp-ssl' 'ftp-upload' \
     'lftp' 'noftp' 'netrw' 'tftp' 'tnftp' 'weex' 'wput' 'yafc' \
     'zftp'
-test -n "$_p" &&
-    $agi "$_p"
 
 
 _at_p "$_def File Mirroring"
-# ftpwatch wget curl axel pavuk sendfile snarf
-_debsel 'avfs' 'backup-manager' 'cadaver' 'ftpgrab' 'ftpmirror' \
+# ftpwatch wget curl axel pavuk sendfile netsend snarf
+_dipick 'avfs' 'backup-manager' 'cadaver' 'ftpgrab' 'ftpmirror' \
     'sitecopy' 'rsync'
-test -n "$_p" &&
-    $agi "$_p"
 
 
 _at_p "$_def Package$_man"
 # ftpwatch wget curl axel
-_debsel 'aptitude' 'dselect' 'cupt' 'wajig' 'aptsh'
-test -n "$_p" &&
-    $agi "$_p"
+_dipick 'aptitude' 'dselect' 'cupt' 'wajig' 'aptsh'
 
 
 _at_p "$_def Local Cheats$_man"
 # To ease maintenance, I favor only the command "cheat"
 # and it should work with users ~/.cheats directory
-if ! $_wic cheat cheatly eg tldr.py >/dev/null
+if ! $wic cheat cheatly eg tldr.py >/dev/null
 then
     _select \
         "cheat - Chris Allen Lane, Python implementation" \
@@ -1142,13 +1200,13 @@ then
             # https://github.com/jahendrie/cheat
             _g_clone jahendrie/cheat || break
             MANFILE=cheat.1.gz
-            DATADIR="$_pdd/cheat"
-            install -D -m 0755 "src/cheat.sh"  "$_pbd/cheat" &&
-            mkdir -pv "$DATADIR" &&
+            DATADIR="$_uld/cheat"
+            install -D -m 0755 "src/cheat.sh"  "$_ulb/cheat" &&
+            $mdp "$DATADIR" &&
             cp -rv data "$DATADIR/sheets" &&
             install -v -D -m 0644 LICENSE "$DATADIR/LICENSE" &&
             install -v -D -m 0644 README "$DATADIR/README" &&
-            install -D -m 0644 "doc/$MANFILE" "$_pdd/man/man1/$MANFILE"
+            install -D -m 0644 "doc/$MANFILE" "$_uld/man/man1/$MANFILE"
             ;;
         3|dufferzafar)
             # https://github.com/dufferzafar/cheat
@@ -1157,10 +1215,10 @@ then
         4|lucaswerkmeister)
             # https://github.com/lucaswerkmeister/cheats
             _g_clone lucaswerkmeister/cheats || break
-            $_wic bash >/dev/null || break
+            $wic bash >/dev/null || break
             cp -rv cheats /etc/skel/.cheats
             # the following simulate the install.sh for all users
-            #mkdir -pv /etc/skel/bin
+            #$mdp /etc/skel/bin
             #cp -v cheats.sh /etc/skel/bin
             #grep -qs 'cheats.sh' $_brc ||
             #printf "\n\nsource ~/bin/cheats.sh" >>$_brc
@@ -1172,32 +1230,32 @@ then
             _g_clone weakish/cheat || break
             for _item in $( ls -1 cheat*.sh )
             do
-                cp -f $_item $_pbd/$( basename $_item .sh ) &&
-                    chmod 755 $_pbd/$( basename $_item .sh )
+                cp -f $_item $_ulb/$( basename $_item .sh ) &&
+                    chmod 755 $_ulb/$( basename $_item .sh )
             done
             ;;
         6|srsudar)
             # https://github.com/srsudar/eg
             $epi eg
-            {
-                echo "[eg-config]"
-                echo "custom-dir = ~/.cheats"
-                echo "#examples-dir = "
-                echo "#pager-cmd = 'cat'"
-                echo "#squeeze = true"
-                echo "#color = false"
-                echo "[eg-color]"
-                echo "#pound = '\x1b[34m\x1b[1m'"
-                echo "#heading = '\x1b[31m\x1b[1m'"
-                echo "heading = '\x1b[38;5;172m'"
-                echo "#prompt = '\x1b[36m\x1b[1m'"
-                echo "#code = '\x1b[32m\x1b[1m'"
-                echo "#backticks = '\x1b[34m\x1b[1m'"
-                echo "#[substitution]"
-                echo "#remove-indents = ['^    ', '', True]"
-            } >> /etc/skel/.egrc
-            mkdir /etc/skel/.cheats
-            cd "$_pbd"
+            cat >/etc/skel/.egrc << EOF
+[eg-config]
+custom-dir = ~/.cheats
+#examples-dir = 
+#pager-cmd = 'cat'
+#squeeze = true
+#color = false
+[eg-color]
+#pound = '\x1b[34m\x1b[1m'
+#heading = '\x1b[31m\x1b[1m'
+heading = '\x1b[38;5;172m'
+#prompt = '\x1b[36m\x1b[1m'
+#code = '\x1b[32m\x1b[1m'
+#backticks = '\x1b[34m\x1b[1m'
+#[substitution]
+#remove-indents = ['^    ', '', True]
+EOF
+            $mdp /etc/skel/.cheats
+            cd "$_ulb"
             ln -s eg cheat
             cd -
             ;;
@@ -1205,17 +1263,17 @@ then
             # https://github.com/lord63/tldr.py
             $epi tldr.py
             _g_clone tldr-pages/tldr || break
-            ln -s "$_psd/tldr" /etc/skel/.cheats
-            {
-                echo "colors:"
-                echo "    command: cyan"
-                echo "    description: magenta"
-                echo "    usage: yellow"
-                echo "platform: linux"
-                echo "repo_directory: $_psd/tldr"
-                echo "#colours in: black, red, green, yellow, blue, magenta, cyan, white"
-            } >> /etc/skel/.tldrrc
-            cd "$_pbd"
+            ln -s "$_uls/tldr" /etc/skel/.cheats
+            cat >/etc/skel/.tldrrc << EOF
+colors:
+    command: cyan
+    description: magenta
+    usage: yellow
+platform: linux
+repo_directory: $_uls/tldr
+#colours in: black, red, green, yellow, blue, magenta, cyan, white
+EOF
+            cd "$_ulb"
             ln -s tldr.py cheat
             cd -
             ;;
@@ -1230,7 +1288,7 @@ then
         x|torsten)
             # https://github.com/torsten/cheat
             _g_clone torsten/cheat || break
-            ln -s "$( pwd )/cheat.rb" $_pbd/cheat
+            ln -s "$( pwd )/cheat.rb" $_ulb/cheat
             ;;
     esac
 fi
@@ -1277,8 +1335,8 @@ then
             # https://github.com/chubin/cheat.sh
             # https://github.com/chubin/cheat.sheets
             # https://www.linuxuprising.com/2019/07/cheatsh-shows-cheat-sheets-on-command.html
-            $_gul -O $_pbd/cht.sh https://cht.sh/:cht.sh &&
-                chmod a+x $_pbd/cht.sh &&
+            $gul -O $_ulb/cht.sh https://cht.sh/:cht.sh &&
+                chmod a+x $_ulb/cht.sh &&
                 $agi curl rlwrap
             ;;
         2|hubsmoke)
@@ -1288,7 +1346,7 @@ then
             ;;
         3|raylee)
             # https://github.com/raylee/tldr
-            $_gul -O "$_pdb/tldr" \
+            $gul -O "$_pdb/tldr" \
                 https://raw.githubusercontent.com/raw/raylee/tldr/master/tldr &&
                 chmod a+x "$_pdb/tldr"
             grep -qs 'tldr' $_bcd/* ||
@@ -1297,12 +1355,13 @@ then
             ;;
         4|pepa65)
             # https://gitlab.com/pepa65/tldr-bash-client
-            $_gul -O "$_pdb/tldr" https://4e4.win/tldr &&
+            $gul -O "$_pdb/tldr" https://4e4.win/tldr &&
                 chmod a+x "$_pdb/tldr"
-            grep -qs 'tldr' $_bcd/* || {
-                printf "\n\ncachedir=~/local/share/tldr\n"
-                echo 'complete -W "$(q=($cachedir/*/*); sed "s@\.md @ @g" <<<$({q[@]##*/})" tldr'
-            } >>$_bcd/tldr
+            grep -qs 'tldr' $_bcd/* ||
+                cat >$_bcd/tldr << 'EOF'
+cachedir=~/local/share/tldr
+complete -W "$(q=($cachedir/*/*); sed "s@\.md @ @g" <<<$({q[@]##*/})" tldr
+EOF
             $agi coreutils grep unzip
             ;;
         5|porras)
@@ -1332,43 +1391,43 @@ then
         10|k3mist)
             # https://github.com/k3mist/tldr
             _make_go bitbucket.org/djr2/tldr
-            mkdir /etc/skel/.tldr
-            {
-                echo '{'
-                echo '"pages_uri": "https://raw.githubusercontent.com/tldr-pages/tldr/master/pages/",'
-                echo '"zip_uri": "https://tldr-pages.github.io/assets/tldr.zip",'
-                echo '"banner_color_1": 36,'
-                echo '"banner_color_2": 34,'
-                echo '"tldr_color": 97,'
-                echo '"header_color": 34,'
-                echo '"header_decor_color": 97,'
-                echo '"platform_color": 90,'
-                echo '"description_color": 0,'
-                echo '"example_color": 36,'
-                echo '"hypen_color": 0,'
-                echo '"syntax_color": 31,'
-                echo '"variable_color": 0,'
-                echo '}'
-            } >> /etc/skel/.tldr/config.json
+            $mdp /etc/skel/.tldr
+            cat >/etc/skel/.tldr/config.json << EOF
+{
+"pages_uri": "https://raw.githubusercontent.com/tldr-pages/tldr/master/pages/",
+"zip_uri": "https://tldr-pages.github.io/assets/tldr.zip",
+"banner_color_1": 36,
+"banner_color_2": 34,
+"tldr_color": 97,
+"header_color": 34,
+"header_decor_color": 97,
+"platform_color": 90,
+"description_color": 0,
+"example_color": 36,
+"hypen_color": 0,
+"syntax_color": 31,
+"variable_color": 0,
+}
+EOF
             ;;
         11|psibi)
             # https://github.com/psibi/tldr-hs
-            $_wic cabal ||
+            $wic cabal ||
                 {
                     $agi haskell-platform
                     cabal update
                 } ||
                 break
-            $_wic stack ||
+            $wic stack ||
                 {
-                    $_gul -O- https://get.haskellstack.org/ | sh
+                    $gul -O- https://get.haskellstack.org/ | sh
                     stack upgrade 
                 } ||
                 break
             stack install tldr
             ;;
         12|tldr-pages-npm)
-            $_wic npm ||
+            $wic npm ||
                 $agi software-properties-common nodejs ||
                 break
             # https://github.com/tldr-pages/tldr-node-client
@@ -1378,7 +1437,7 @@ then
             ;;
         13|RosalesJ)
             # https://github.com/RosalesJ/tldr-ocaml
-            $_wic opam ||
+            $wic opam ||
                 $agi ocaml-nox ocaml-tools ||
                 break
             opam install tldr
@@ -1392,11 +1451,11 @@ then
         15|brainmaestro)
             # https://github.com/brainmaestro/tldr-php
             $agi php5-cli php-cli #php7.0-cli
-            $_wic composer ||
+            $wic composer ||
                 {
-                    $_gul https://getcomposer.org/installer | php
-                    mv composer.phar "$_pbd/composer"
-                    chmod a+x "$_pbd/composer"
+                    $gul https://getcomposer.org/installer | php
+                    mv composer.phar "$_ulb/composer"
+                    chmod a+x "$_ulb/composer"
                 } ||
                 break
             composer global require brainmaestro/tldr
@@ -1407,7 +1466,7 @@ then
             ;;
         17|YellowApple)
             # https://github.com/YellowApple/tldrb
-            $_wic gem >/dev/null || $agi ruby
+            $wic gem >/dev/null || $agi ruby
             $eri tldrb
             ;;
         18|rilut)
@@ -1432,20 +1491,14 @@ _at_p "$_def DotFiles$_man"
 # aware when something else is in use (installed manually or via .setup
 # script in a know path isn't it?) The following are tested:
 # - https://github.com/koenwoortman/dots (things are defined in dotsrc.json and it uses jq command)
-if ! _cmd_ok dots
-then
+_cmd_ok dots ||
+    _dipick 'rcm' 'stow' 'vcsh' 'xstow' 'git-annex'
     # beware, for RCM, be sure to add the repository before
     # look at instructions at https://github.com/thoughbot/rcm
-    _debsel 'rcm' 'stow' 'vcsh' 'xstow' 'git-annex'
-    test -n "$_p" &&
-        $agi "$_p"
-fi
 
 
-_at_p "install extra P packages"
+_at_p "Install Extra Python Packages"
 # ensure the following packages are there
-if test -e "$_sdn/$( hostname -s).pip.lst"
-then
-    _instalf "$_sdn/$( hostname -s).pip.lst" "$epi -U"
-fi
+test -e "$_sdn/$_hos.pip.lst" &&
+    _instalf "$_sdn/$_hos.pip.lst" "$epi -U"
 
