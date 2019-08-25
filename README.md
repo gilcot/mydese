@@ -58,15 +58,17 @@ sh pic.sh
 ```
 Well, but what if you have different needs? Easy: before launching the
 script, prepare one of those files:
-  - two files for specific things related to the organisation
+  - some files for specific things related to the organisation
     - `*.list`: specific source lists to add
     - `$domainname.setup`: shell commands source before other processing
+    - `root_bashrc`: own `~/root/.bashrc` instead of script default
   - two files to override default packages installation
     - `all.deb.lst`: list of system packages to install
     - `all.pip.lst`: list of _Python_ packages to install
   - two files for additional packages installation
     - `$hostname.deb.lst`: list of system packages to install
     - `$hostname.pip.lst`: list of _Python_ packages to install
+
 Packages lists can be retrieved, for example, from:
 ```shell
 # Debian packages currently installed

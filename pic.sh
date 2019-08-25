@@ -138,11 +138,10 @@ _select() {
 # (return with success at first found)
 # $@: commands to check for, in order
 _cmd_ok() {
-    for _item in $@
+    for _item in "$@"
     do
         $wic $_item && return
     done
-    #return 1
 }
 
 ## install with list from file
@@ -177,7 +176,7 @@ _make_go() {
     # https://www.digitalocean.com/community/tutorial/how-to-install-go-on-debian-9
     if ! $wic go >/dev/null
     then
-        $agi golang-go
+        $agi golang-go #golang-src # this latest is a dependancy
         # of course, change $GOROOT to installation directory
         # (e.g. $PREFIX/go) if it's installed from sources
         # https://linoxide.com/linux-how-to/install-go-ubuntu-linux-centos/
@@ -186,14 +185,16 @@ export GOROOT=/usr/lib/go
 export GOPATH="$HOME/go"
 export PATH="$PATH:$GOROOT/bin:$GOPATH/bin"
 EOF
+        # but use the following for that session
+        export GOROOT="/usr/lib/go"
+        export GOPATH="$_ibd"
     fi
     cd "$_uls"
-    export GOPATH="$_ibd"
-    for _item in $@
+    for _item in "$@"
     do
         go get $_item
     done
-    for _item in $@
+    for _item in "$@"
     do
         go install $_item
     done
@@ -209,7 +210,7 @@ _inst_ru() {
     $wic cargo >/dev/null ||
         $agi cargo ||
         break
-    for _item in $@
+    for _item in "$@"
     do
         cargo install $_item
     done
@@ -232,17 +233,19 @@ _g_clone() {
 # $_p: result (i.e. package selected)
 _debsel() {
     _p=''
-    for _item in $@
+    for _item in "$@"
     do
-        echo "$_dpl" | grep -s -w $_item && return
+        echo "$_dpl" | grep -s -w "^$_item$" && return
     done
     _old="$IFS" IFS="
-" _sel=$( for _item in $@
+"
+    _sel=$( for _item in "$@"
     do
         apt-cache search -n ^$_item$
     done)
     _select $_sel
     IFS=$_old
+    unset _old
     if test $_c -ne 0
     then
         _p=$( echo $_sel | awk -v N=$_c 'NR=$N {print $1}' )
@@ -253,7 +256,7 @@ _debsel() {
 ## install a package from a group
 # $@: items to choose from, in order
 _dipick() {
-    _debsel $@
+    _debsel "$@"
     test -n "$_p" &&
         $agi "$_p"
 }
@@ -318,11 +321,11 @@ apt-get -qq upgrade || exit 2
 
 _at_p "Install Additionnal System Packages"
 # ensure the following packages are there
-if test -e "$_sdn/all.deb.lst"
+if test -f "$_sdn/$_dom.deb.lst"
 then
-    # As I'm sharing this on a public Git, let's give ability to have
-    # own default packages (e.g. one may prefere Nano instead of ViM)
-    # So people won't need to patch my maintenance releases for that!
+    _instalf "$_sdn/$_dom.deb.lst"
+elif test -f "$_sdn/all.deb.lst"
+then
     _instalf "$_sdn/all.deb.lst"
 else
     # I should keep that list as small as possible, as I have Ansible
@@ -339,13 +342,44 @@ fi
 # Install virtual machine additionals
 if $wic virt-what >/dev/null
 then
+    # https://people.redhat.com/~rjones/virt-what/
     # https://people.redhat.com/~rjones/virt-what/virt-what.txt
     _vmt="$( virt-what | head -n 1 )"
+elif $wic imvirt >/dev/null
+then
+    # http://micky.ibh.net/~liske/imvirt.html
+    _vmt="$( imvirt )"
 elif $wic dmidecode >/dev/null
 then
+    # https://unix.stackexchange.com/89718
+    # https://www.dmo.ca/blog/detecting-virtualization-on-linux/
     _vmt="$( dmidecode -s system-product-name )"
+elif $wic hostnamectl >/dev/null
+then
+    _vmt="$( hostnamectl |
+        awk -F ': ' '/ Virtualization:/{print $2}' )"
+elif $wic systemd-detect-virt >/dev/null
+then
+    _vmt="$( systemd-detect-virt )"
+elif $wic facter >/dev/null
+then
+    _vmt="$( facter virtual )"
+elif $wic lshw >/dev/null
+then
+    _vmt="$( lshw -class system |
+        awk -F ': ' '/ product:/{print $2}' )"
+elif $wic hwinfo >/dev/null
+then
+    _vmt="$( hwinfo --all |
+        awk -F "'" '/system.hardware.product =/{print $2}' )"
+elif $wic inxi >/dev/null
+then
+    _vmt="$( inxi -M |
+        grep -o 'product:.*:' |
+        cut -d ':' -f 2 )"
 else
-    _vmt=''
+    # is it possible to use lspci or lscpu easely for the purpose?
+    _vmt="$( cat /sys/class/dmi/id/product_name 2>/dev/null )"
 fi
 case $_vmt in
     'VirtualBox'|'virtualbox') # Sun/Oracle VirtualBox
@@ -447,11 +481,8 @@ then
 fi
 
 _at_t "root bashrc"
-if test -e $_sdn/root_bashrc
+if test -f $_sdn/root_bashrc
 then
-    # As I'm sharing this on a public Git, let's give ability to have
-    # something different from mine
-    # So people won't need to patch my maintenance releases for that!
     cat $_sdn/root_bashrc >/root/.bashrc
 else
     cat >/root/.bashrc << 'EOF'
@@ -527,10 +558,12 @@ then
     python get-pip.py || exit 2
 fi
 
-if test -e "$_sdn/all.pip.lst"
+if test -e "$_sdn/$_dom.pip.lst"
 then
-    # As I'm sharing this on a public Git, let's give ability to have
-    # own default packages instead of always patching this script
+    _at_p "Install Common Python Packages"
+    _instalf "$_sdn/$_dom.pip.lst" "$epi"
+elif test -e "$_sdn/$_dom.pip.lst"
+then
     _at_p "Install Common Python Packages"
     _instalf "$_sdn/all.pip.lst" "$epi"
 else
@@ -621,15 +654,15 @@ else
             # Wheezy has all those (and their libs) as dependencies to nmap :o
             _p=''
             for _item in \
-                gsfonts \
-                ghostscript \
-                gnuplot-nox \
-                groff \
-                netpbm \
-                psutils \
-                ufraw-batch \
-                imagemagick \
-                nmap
+                'gsfonts' \
+                'ghostscript' \
+                'gnuplot-nox' \
+                'groff' \
+                'netpbm' \
+                'psutils' \
+                'ufraw-batch' \
+                'imagemagick' \
+                'nmap'
             do
                 _at_p "$_item"
                 $agi $_item
@@ -643,7 +676,7 @@ else
             ;;
         12|windows)
             # https://docs.ansible.com/ansible/latest/user_guide/windows_winrm.html
-            for _item in krb5-user libkrb5-dev python-dev
+            for _item in 'krb5-user' 'libkrb5-dev' 'python-dev'
             do
                 _at_p "$_item"
                 $agi $_item
@@ -700,12 +733,12 @@ else
     # https://github.com/anshumanb/jinja2-cli
     # https://github.com/kolypto/j2cli
     for _p in \
-        ansible-inventory-grapher \
-        ansible-playbook-grapher \
-        ansible-roles-graph \
-        ansible-cmdb \
-        ansible-lint \
-        j2cli[yaml]
+        'ansible-inventory-grapher' \
+        'ansible-playbook-grapher' \
+        'ansible-roles-graph' \
+        'ansible-cmdb' \
+        'ansible-lint' \
+        'j2cli[yaml]'
     do
         if ! $wic $_p
         then
@@ -723,21 +756,28 @@ _dipick 'calife' 'chiark-really' 'dpsyco-sudo' #'sudo'
 _at_p "$_def Commands Shell"
 # Most Linux distros install BASH as default.
 # Debian family also ship it's version of ASH
+# Linux distros are installed with BusyBox 
+# wich often isn't removed after.
 # falselogin fbterm lshell rssh rush
+# https://elv.sh not packaged yet
 _dipick 'csh' 'fish' 'fizsh' 'ksh' 'mksh' 'mosh' 'pdksh' 'posh' \
-    'rc' 'sash' 'shtool' 'tcsh' 'yash' 'zsh' # 'bash' 'dash'
+    'rc' 'sash' 'shtool' 'tcsh' 'yash' 'zsh' 'cleo' 'elv' \
+    'busybox-static' 'bash-static' 'zsh-static' # 'busybox' 'bash' 'dash'
 
 
 _at_p "$_def Other Interpreter"
 # cl-launch
-_dipick 'bsh' 'bwbasic' 'ipython' 'jimsh' 'lush' 'php5-cli' 'scsh' 'tkcon'
+_dipick 'bsh' 'bwbasic' 'ipython' 'jimsh' 'lush' 'mruby' 'php5-cli' \
+    'pipump-shell' 'python-plumbum' 'scsh' 'tcl' 'tcl8.4' 'tcl8.5' \
+    'tcl8.6' 'tkcon'
 
 
 _at_p "$_def SSH cluster"
 # Despite the word cluster, those have nothing to do with:
 # broctl cman zeekctl csync2 ...
-# It's more similar to https://github.com/byjg/automate or Fabric
-# See http://www.fabfile.org/ about using Frabric! and also read:
+# It's more similar to https://github.com/byjg/automate or Cdist 
+# https://www.cdi.st/ also see https://en.wikipedia.org/wiki/Cdist)
+# or Fabric See http://www.fabfile.org/ about it, and also read:
 # - https://www.digitalocean.com/commutinty/tutorials/how-to-use-fabric-to-automate-administration-tasks-deployments
 # - https://docs.fabfile.org/en/1.11/tutorial.html
 # - https://nosarthur.github.io/coding/2019/05/16/deploy-fabric.html
@@ -807,7 +847,7 @@ case $_p in
         ;;
     darcs)
         _p="$_p darcsum"
-        $wic bzr </dev/null &&
+        $wic bzr >/dev/null &&
             _p="$_p bzr-fastimport commit-patch tailor"
         # for server, install also: darcsweb darcs-monitor
         ;;
@@ -856,7 +896,8 @@ _dipick 'mr' 'myrepos' 'moap'
 _at_p "$_def LDAP$_bro"
 # not to confuse with things like: gosa lat ldap2(dns|zone) phamm
 # those are more like (but console): jxplorer ldapadmin
-_dipick 'cpu' 'ldaptor-utils' 'ldap-utils' 'ldapvi' 'shelldap'
+_dipick 'cpu' 'ldaptor-utils' 'ldap-utils' 'ldapvi' 'nslcd-tools' \
+    'shelldap'
 
 
 _at_p "$_def Calendaring Tool"
@@ -867,8 +908,8 @@ _dipick 'ccal' 'calcurse' 'gcal' 'pal' 'remind' 'when' 'wyrd'
 
 
 _at_p "$_def Tasks$_man"
-_dipick 'calcurse' 'devtodo' 'etm' 'hnb' 'org-mode' \
-    'tasque' 'tdl' 'task' 'tasks' 'todotxt-cli' 'tudu' \
+_dipick 'calcurse' 'devtodo' 'etm' 'hnb' 'mono-csharp-shell' 'org-mode' \
+    'tasque' 'tdl' 'task' 'tasks' 'tasksh' 'todotxt-cli' 'tudu' \
     'ukolovnik' 'yagtd' 'yokadi' 'w2do'
 
 
@@ -1172,7 +1213,7 @@ _dipick 'avfs' 'backup-manager' 'cadaver' 'ftpgrab' 'ftpmirror' \
 
 _at_p "$_def Package$_man"
 # ftpwatch wget curl axel
-_dipick 'aptitude' 'dselect' 'cupt' 'wajig' 'aptsh'
+_dipick 'aptitude' 'dselect' 'cupt' 'wajig' 'smartpm' 'aptsh'
 
 
 _at_p "$_def Local Cheats$_man"
@@ -1194,7 +1235,15 @@ then
     case $_c in
         1|cheat)
             # https://github.com/cheat/cheat
-            $epi cheat
+            $epi pygments termcolor cheat
+            cp "${CHEAT_PATH:-/usr/share/cheat}/autocompletion/cheat.bash" $_bcd/cheat
+            cat >/etc/profile.d/cheat.sh << EOF
+#export CHEAT_PATH='/usr/share/cheat/cheatsheets'
+#export CHEAT_USER_PATH='~/.cheats'
+export CHEAT_COLORS=true # true|false
+export CHEAT_COLORSCHEME='dark' # dark|ligth
+export CHEAT_HIGHLIGHT=magenta # blue|cyan|green|magenta|red|white|yellow
+EOF
             ;;
         2|jahendrie)
             # https://github.com/jahendrie/cheat
@@ -1240,8 +1289,9 @@ then
             cat >/etc/skel/.egrc << EOF
 [eg-config]
 custom-dir = ~/.cheats
-#examples-dir = 
+#examples-dir = /usr/local/lib/python2.7/dist-packages/eg/examples
 #pager-cmd = 'cat'
+#page-cmd = 'less -RMFXK'
 #squeeze = true
 #color = false
 [eg-color]
@@ -1491,10 +1541,10 @@ _at_p "$_def DotFiles$_man"
 # aware when something else is in use (installed manually or via .setup
 # script in a know path isn't it?) The following are tested:
 # - https://github.com/koenwoortman/dots (things are defined in dotsrc.json and it uses jq command)
+# Beware, for RCM, be sure to add the repository before ; read instruction
+# at https://github.com/thoughbot/rcm
 _cmd_ok dots ||
     _dipick 'rcm' 'stow' 'vcsh' 'xstow' 'git-annex'
-    # beware, for RCM, be sure to add the repository before
-    # look at instructions at https://github.com/thoughbot/rcm
 
 
 _at_p "Install Extra Python Packages"
