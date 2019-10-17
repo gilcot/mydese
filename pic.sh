@@ -11,7 +11,7 @@
 
 ## global variables
 _c=0    # changed by _select()
-_p=''   # changed by _debsel()
+_p=''   # changed by _aptsel()
 
 ## constants: fixed strings
 # start of many strings used with _at_p()
@@ -56,8 +56,10 @@ epi="pip -qq --retries 2 --timeout 7 install"
 eri="$wic gem >/dev/null || $agi ruby ; gem install"
 
 ## constants: variant strings
-# Debian installed Packages List ; used by _debsel()
+# Debian installed Packages List ; used by _aptsel()
 _dpl="$( dpkg --get-selections | awk '{print $1}' )"
+# Python installed Packages List ; used by _pipsel()
+_ppl="$( pip list 2>/dev/null | awk '{print $1}' )"
 # Script Directory Name ; used by _installf() and elsewhere
 _sdn="$( readlink -fns "$( dirname $0 )" )"
 # domain name ;
@@ -88,7 +90,7 @@ fi
 _at_p() {
     if test $_w -ne 0
     then
-        printf "\033[44;36m => %*s\033[0m\n" \
+        printf "\033[44;36m\n => %*s\033[0m\n" \
             "-$(( _w - 4 ))" "$1"
     else
         echo " => $1"
@@ -116,20 +118,21 @@ _select() {
     do
         if test $_w -ne 0
         then
-           printf "\033[44;37m\t%d\t%*s\033[0m\n" \
-               $_i "-$(( _w - 16 ))" "$_item"
+           printf "\033[44;37m%5d   %*s\033[0m\n" \
+               $_i "-$(( _w - 8 ))" "$_item"
         else
-            printf "\t%d\t%s\n" $_i "$_item"
+            printf "%5d   %s\n" $_i "$_item"
         fi
         _i=$(( _i+1 ))
     done
     unset _i
     if test $_w -ne 0
     then
-        printf "\033[44;37m choice:\t\033[0m"
+        printf "\033[44;37m choice:\033[0m"
     else
-        printf " choice:\t"
+        printf " choice:"
     fi
+    printf "\t"
     read -r _c
     _c=$(( _c ))
 }
@@ -231,7 +234,7 @@ _g_clone() {
 # and if none of them, make a selection list
 # $@: items to choose from, in order
 # $_p: result (i.e. package selected)
-_debsel() {
+_aptsel() {
     _p=''
     for _item in "$@"
     do
@@ -256,9 +259,49 @@ _debsel() {
 ## install a package from a group
 # $@: items to choose from, in order
 _dipick() {
-    _debsel "$@"
+    _aptsel "$@"
     test -n "$_p" &&
         $agi "$_p"
+}
+
+## choose a package to install in a group
+# see if a package of a list is installed,
+# and if none of them, make a selection list
+# $@: items to choose from, in order
+# $_p: result (i.e. package selected)
+_pipsel() {
+    _p=''
+    for _item in "$@"
+    do
+        echo "$_ppl" | grep -s -w "^$_item" && return
+    done
+    _old="$IFS" IFS="
+"
+    # https://stackoverflow.com/a/36764571
+    # https://superuser.com/a/508328
+    # https://github.com/pypa/pip/issues/4883
+    local _sel
+    _sel=$( for _item in "$@"
+    do
+        pip search $_item 2>/dev/null |
+            awk -F ' +- +' "/^$_item /{print \$1,\"-\",\$2}"
+    done)
+    _select $_sel
+    IFS=$_old
+    unset _old
+    if test $_c -ne 0
+    then
+        _p=$( echo "$_sel" | sed -n "${_c}p" | awk '{print $1}' )
+    fi
+    unset _sel
+}
+
+## install a package from a group
+# $@: items to choose from, in order
+_pipick() {
+    _pipsel "$@"
+    test -n "$_p" &&
+        $epi "$_p"
 }
 
 
@@ -330,9 +373,9 @@ then
 else
     # I should keep that list as small as possible, as I have Ansible
     # playbooks to add and configure some other stuffs when required.
-    # question: should I add in the list: rlfe 
     for _item in ssh sshpass gnupg-agent pwgen cowsay mtr gpm \
-        ca-certificates cifs-utils smbclient lsb-release rlpr sl
+        ca-certificates cifs-utils smbclient lsb-release rlpr \
+        sl cowsay fortune
     do
         _at_t "$_item"
         $agi $_item
@@ -440,7 +483,7 @@ _at_p "Misc. System Configuration"
 # some setings I used to
 
 _at_t "Login Banner"
-_debsel 'linuxlogo' 'neofetch' 'screenfetch' 'sysvbanner'
+_aptsel 'linuxlogo' 'neofetch' 'screenfetch' 'sysvbanner'
 if test -n "$_p"
 then
     $agi "$_p"
@@ -467,7 +510,7 @@ then
             # However "-d" option seems buggy when tested with 3.6.2;
             # hope it's corrected with current 3.8.0
             _p="$_p -E"
-            if test $( $_p -V | head -n 1 | 
+            if test $( $_p -V | head -n 1 |
                 grep -os '[1-9]\.[0-9]\.[0-9]' | cut -c 1,3 ) -gt 36
             then
                 _p="$_p -d '+distro;+kernel;-uptime;-pkgs;-shell;+cpu;+mem;+host' "
@@ -552,17 +595,18 @@ if ! $wic pip #>/dev/null
 then
     # instructions from https://github.com/pypa/get-pip
     _at_t "Retrieve Installer"
-    test -e get-pip.py ||
+    test -f get-pip.py ||
         $gul https://bootstrap.pypa.io/get-pip.py || exit 2
     _at_t "Install pip:lastest"
     python get-pip.py || exit 2
 fi
 
-if test -e "$_sdn/$_dom.pip.lst"
+
+if test -f "$_sdn/$_dom.pip.lst"
 then
     _at_p "Install Common Python Packages"
     _instalf "$_sdn/$_dom.pip.lst" "$epi"
-elif test -e "$_sdn/$_dom.pip.lst"
+elif test -f "$_sdn/all.pip.lst"
 then
     _at_p "Install Common Python Packages"
     _instalf "$_sdn/all.pip.lst" "$epi"
@@ -608,7 +652,7 @@ else
         "VMware ESX/ESXi/vCenter" \
         "Windows hosts" \
         "Cloudscale / Foreman / NetBox / Online / Scaleway / Ansible Tower / Oracle VirtualBox / vultr" \
-        #"Proxmox VE" 
+        #"Proxmox VE"
     case $_c in
         1|amazon)
             # https://docs.ansible.com/latest/plugins/inventory/aws_ec2.html
@@ -701,25 +745,38 @@ else
     then
         _at_t "$_p"
         $epi $_p
+        _p=''
     fi
 
     _at_p "Install Ansible:extra"
-    # graphes
-    # https://univers-libre.net/posts/ansible-infrastructure-diagram.html
     # note that core now comes with ansible-inventory command with --graph
     # https://github.com/willthames/ansible-inventory-grapher
     # https://github.com/haidaraM/ansible-playbook-grapher
     # https://github.com/ansiblejunky/ansible-graph
     # https://github.com/sebn/ansible-roles-graph
     # https://github.com/croesnickn/ansible-discover
-    _at_t "graphviz"
-    $agi graphviz
-    # publish inventory
     # note that core now comes with ansible-inventory command with --list
     # https://docs.ansible.com/ansible/latest/cli/ansible-inventory.html
     # https://ansible-cmdb.readthedocs.io/en/stable/usage/
     # https://github.com/fboender/ansible-cmdb
-    # review/lint/ci
+    _at_t "inventory Grapher"
+    _pipick 'ansible-inventory-grapher' 'ansible-playbook-grapher' \
+        'ansible-roles-graph' 'ansible-discover' 'ansible-cmdb'
+    # https://univers-libre.net/posts/ansible-infrastructure-diagram.html
+    test -n "$_p" &&
+    {
+        _at_t "graphviz"
+        $agi graphviz
+    }
+    _at_t "inventory$_man"
+    _pipick 'ansible-hostmanager' 'ansible-role-manager' \
+        'ansible-conductor' 'ansible-inventory'
+    _at_t "interactive cli"
+    _pipick 'ansible-shell' 'polemarch-ansible' 'ansible-apply' \
+        'ansible-tower-cli'
+    _at_t "other tools"
+    _pipick 'ansible-toolset' 'ansible-toolkit' 'ansible-tools' \
+        'ansible-art'
     # https://www.egi.eu/blog/ansible-style-guide-in-action
     # https://www.jeffgeerling.com/blog/2018/testing-your-ansible-roles-molecule
     # https://univers-libre.net/posts/ansible-molecule.html
@@ -729,34 +786,28 @@ else
     # https://github.com/ansible/ansible-lint
     # https://molecule.readthedocs.io/en/stable/
     # https://github.com/ansible/molecule
-    # more Jinja
+    _at_t "review, ci/cd"
+    _pipick 'ansible-lint' 'ansible-later' 'ansible-review' 'molecule' \
+    _at_t "more Jinja2"
     # https://github.com/anshumanb/jinja2-cli
     # https://github.com/kolypto/j2cli
-    for _p in \
-        'ansible-inventory-grapher' \
-        'ansible-playbook-grapher' \
-        'ansible-roles-graph' \
-        'ansible-cmdb' \
-        'ansible-lint' \
-        'j2cli[yaml]'
-    do
-        if ! $wic $_p
-        then
-            _at_t "$_p"
-            $epi $_p
-        fi
-    done
+    _pipick 'django-jinja2' 'jinja2-cli' 'jinja2-cli-whitespace' \
+        'j2cli' 'j2cli-3' 'kamidana' 'shinto-cli'
 fi
 
 
 _at_p "$_def Privileges Escalation$_man"
-_dipick 'calife' 'chiark-really' 'dpsyco-sudo' #'sudo'
+_dipick 'calife' 'chiark-really' 'dpsyco-sudo' 'sudo'
+
+
+_at_p "ReadLine Supplement"
+_dipick 'rlfe' 'rlwrap' 'ledit'
 
 
 _at_p "$_def Commands Shell"
 # Most Linux distros install BASH as default.
 # Debian family also ship it's version of ASH
-# Linux distros are installed with BusyBox 
+# Linux distros are installed with BusyBox
 # wich often isn't removed after.
 # falselogin fbterm lshell rssh rush
 # https://elv.sh not packaged yet
@@ -767,15 +818,15 @@ _dipick 'csh' 'fish' 'fizsh' 'ksh' 'mksh' 'mosh' 'pdksh' 'posh' \
 
 _at_p "$_def Other Interpreter"
 # cl-launch
-_dipick 'bsh' 'bwbasic' 'ipython' 'jimsh' 'lush' 'mruby' 'php5-cli' \
-    'pipump-shell' 'python-plumbum' 'scsh' 'tcl' 'tcl8.4' 'tcl8.5' \
-    'tcl8.6' 'tkcon'
+_dipick 'bpython' 'bsh' 'bwbasic' 'ipython' 'jimsh' 'lush' 'mruby' \
+    'perlconsole' 'php5-cli' 'pipump-shell' 'python-plumbum' 'scsh' \
+    'swi-prolog-nox' 'tcl' 'tcl8.4' 'tcl8.5' 'tcl8.6' 'tkcon'
 
 
 _at_p "$_def SSH cluster"
 # Despite the word cluster, those have nothing to do with:
 # broctl cman zeekctl csync2 ...
-# It's more similar to https://github.com/byjg/automate or Cdist 
+# It's more similar to https://github.com/byjg/automate or Cdist
 # https://www.cdi.st/ also see https://en.wikipedia.org/wiki/Cdist)
 # or Fabric See http://www.fabfile.org/ about it, and also read:
 # - https://www.digitalocean.com/commutinty/tutorials/how-to-use-fabric-to-automate-administration-tasks-deployments
@@ -790,7 +841,7 @@ _at_p "$_def SSH cluster"
 # - https://blog.linuxserver.io/2018/02/09/q-quick-intro-to-ansible-console/
 # - https://yobriefca.se/blog/2017/01/10/ansible-console-an-interactive-repl-for-ansible/
 # - https://blog.james-carr.org/a-read-eval-print-loop-for-ansible-4f16f266a3d6
-_debsel 'clustershell' 'clusterssh' \
+_aptsel 'clustershell' 'clusterssh' \
     'dish' 'dsh' 'mussh' 'pconsole' 'pdsh' 'pssh' 'sinfo' 'sslh' 'taktuk'
 test "$_p" = 'taktuk' &&
     _p='taktuk kanif'
@@ -804,25 +855,57 @@ _at_p "$_def Term. Multiplexer"
 _dipick 'screen' 'tmux' 'elscreen' 'dtach' 'byobu'
 
 
-_at_p "$_def Text Editor"
+_at_p "$_def File Text Editor"
 # by default, 'nano-tiny' and 'vim-tiny' are installed.
-# install full 'nano' and 'vim'  in order to have all features.
-# question: should I separe line editors from screen editors?
-_dipick 'alpine-pico' 'ed' 'elvis-console' 'emacs23-nox' 'emacs24-nox' \
-    'fte-console' 'fte-terminal' 'jed' 'joe' 'jove' 'jupp' 'le' 'ledit' \
-    'levee' 'mcedit' 'mg' 'nano' 'ne' 'nvi' 'vile' 'vim-nox' 'vim-basic' 'vim'
+# install full 'nano' and 'vim' in order to have all features.
+# Question: should I separe line editors from screen editors?
+# Note that some of those editors may not be packaged yet
+# - http://dav-text.sourceforge.net/
+# - http://phdm.webay.be
+# - https://sites.google.com/e3editor/
+# - https://jolomo.net/ce/
+# - https://freecode.com/projects/leeditor
+# - http://ne.dsi.unimi.it/
+# - http://sourceforge.net/projects/joe-editor/
+# - https://www.gnu.org/software/ed/
+# - http://led-editor.sourceforge.net/
+# - http://cdsmith.twu.net/professional/opensource/lpe.html
+# - http://diakonos.pist0s.ca/
+# - http://sam.cat-v.org/
+# - http://www.deadpixi.cmo/an-updated-version-of-sam/ https://github.com/deadpixi/sam
+# - http://se-editor.org/ https://github.com/screen-editor/se
+# - https://www.uv.es/sce
+_dipick 'alpine-pico' 'dav' 'diakonos' 'e3' 'ed' 'elvis-console' \
+    'emacs23-nox' 'emacs24-nox' 'fe' 'fte-console' 'fte-terminal' \
+    'jed' 'joe' 'jove' 'jupp' 'le' 'led' 'pe' 'levee' 'mcedit' 'mg' \
+    'nano' 'ne' 'nvi' 'se' 'ved' 'vile' 'vim-nox' 'vim-basic' 'vim'
+
+
+# - https://sourceforge.net/projects/change.berlios
+# - https://www.gnu.org/software/sed/
+# - http://www.exactcode.de/oss/minised/
+# - http://sed.sourceforge.net/grabbag/ssed/
+# - http://sedsed.sourceforge.net/
+# - http://replace.richardlloyd.org.uk/
+# - http://outl.sourceforge.net/
+# - http://www.maplefish.com/todd/afm.htm
+_at_p "$_def Stream Processor"
+_dipick 'aft' 'gawk' 'original-awk' 'outl' 'rpl' 'sedsed' 'ssed' #'mawk' 'sed'
 
 
 _at_p "$_def grep alternative"
 _dipick 'ripgrep' 'ack-grep' 'sgrep' 'agrep' 'grepcidr' #'grep'
 
 
+# By default, Debian install "more" with "man" pages
+# Note that for some text files, one may use "view" (i.e. "vim -r")
+# to have syntaxe highlighting and more.
 _at_p "$_def Pager"
-_dipick 'less' 'more' 'most' 'pg'
+_dipick 'less' 'most' 'pg' #'more'
 
 
 _at_p "$_def Revision System"
-_debsel 'bzr' 'cvs' 'cssc' 'darcs' 'easygit' 'git' 'mercurial' 'rcs' \
+_aptsel 'bzr' 'cvs' 'cssc' 'darcs' 'easygit' 'git' 'mercurial' 'rcs' \
     'rabitvcs-cli' 'subversion' 'tla'
 case $_p in
     bzr)
@@ -833,7 +916,7 @@ case $_p in
             _p="$_p bzr-fastimport bzr-svn tailor"
         $wic cvs >/dev/null &&
             _p="$_p cvs2svn"
-        # for server, install also: bzr-email bzr-upload bzr-xmloutput  loggerhead trac-bzr
+        # for server, install also: bzr-email bzr-upload bzr-xmloutput loggerhead trac-bzr
         ;;
     cvs)
         _p="$_p curves"
@@ -896,8 +979,9 @@ _dipick 'mr' 'myrepos' 'moap'
 _at_p "$_def LDAP$_bro"
 # not to confuse with things like: gosa lat ldap2(dns|zone) phamm
 # those are more like (but console): jxplorer ldapadmin
+# - http://sourcefourge.net/projects/led/
 _dipick 'cpu' 'ldaptor-utils' 'ldap-utils' 'ldapvi' 'nslcd-tools' \
-    'shelldap'
+    'shelldap' 'led.pl'
 
 
 _at_p "$_def Calendaring Tool"
@@ -935,8 +1019,8 @@ then
         "kpclix - KeePassX client in PERL, with Xclip support" \
         "pass - Pass-store: directories based PM with PGP, in C" \
         "passhole - KeePass client in Python, with Pass-store looklike" \
-        "passmgr  - Simple portable PM, in Go" \
-        "passpie  - Configurable colorful directories based PM with PGP, in Python" \
+        "passmgr - Simple portable PM, in Go" \
+        "passpie - Configurable colorful directories based PM with PGP, in Python" \
         "pwman3 - Lightweiht command line PM which can use different databases" \
         "ripasso - Pass-store read-only nice interface in Rust" \
         "upass - Pass-store friendly interface in Python" \
@@ -1142,7 +1226,7 @@ _at_p "$_def Mails-n-News Client"
 # https://wiki.archlinux.org/index.php/Notmuch lists them
 # Some listed alternatives won't show unless repository was registered
 # https://www.neomutt.org/distro.html
-_debsel 'alpine' 'cone' 'mutt' 'bsd-mailx' 'heirloom-mailx' \
+_aptsel 'alpine' 'cone' 'mutt' 'bsd-mailx' 'heirloom-mailx' \
     'mailutils' 's-nail' 'notmuch-mutt' 'neomutt' 'alot' \
     'sup-mail' 'notmuch-vim' 'elpa-notmuch' 'bower' 'ner' \
     'trn4' 'suck' # those 2 laters may requier inn or inn2 server
@@ -1183,7 +1267,7 @@ test -n "$_p" &&
 _at_p "$_def File$_bro"
 if ! $wic ranger
 then
-    _debsel 'clex' 'gnuit' 'gt5' 'lfm' 'vfu' 'vifm' 'ranger' 'mc'
+    _aptsel 'clex' 'gnuit' 'gt5' 'lfm' 'vfu' 'vifm' 'ranger' 'mc'
     if test "$_p" = 'ranger'
     then
         # img2txt is found in caca-utils
@@ -1250,7 +1334,7 @@ EOF
             _g_clone jahendrie/cheat || break
             MANFILE=cheat.1.gz
             DATADIR="$_uld/cheat"
-            install -D -m 0755 "src/cheat.sh"  "$_ulb/cheat" &&
+            install -D -m 0755 "src/cheat.sh" "$_ulb/cheat" &&
             $mdp "$DATADIR" &&
             cp -rv data "$DATADIR/sheets" &&
             install -v -D -m 0644 LICENSE "$DATADIR/LICENSE" &&
@@ -1271,7 +1355,7 @@ EOF
             #cp -v cheats.sh /etc/skel/bin
             #grep -qs 'cheats.sh' $_brc ||
             #printf "\n\nsource ~/bin/cheats.sh" >>$_brc
-            # but I prefer this 
+            # but I prefer this
             cp -rv cheats.sh /etc/profile.d/
             ;;
         5|weakish)
@@ -1471,7 +1555,7 @@ EOF
             $wic stack ||
                 {
                     $gul -O- https://get.haskellstack.org/ | sh
-                    stack upgrade 
+                    stack upgrade
                 } ||
                 break
             stack install tldr
@@ -1537,12 +1621,13 @@ fi
 
 _at_p "$_def DotFiles$_man"
 # They're many solutions available. This script can install only solution
-# available in repositories (that's to keep things simple.)  However it's
+# available in repositories (that's to keep things simple.) However it's
 # aware when something else is in use (installed manually or via .setup
 # script in a know path isn't it?) The following are tested:
 # - https://github.com/koenwoortman/dots (things are defined in dotsrc.json and it uses jq command)
 # Beware, for RCM, be sure to add the repository before ; read instruction
 # at https://github.com/thoughbot/rcm
+# For VCSH and MR, see https://github.com/RichiH/vcsh_mr_template
 _cmd_ok dots ||
     _dipick 'rcm' 'stow' 'vcsh' 'xstow' 'git-annex'
 
