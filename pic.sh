@@ -44,7 +44,7 @@ _bcd=/usr/share/bash-completion/completions
 wic="command -v"
 # Get this URL Link
 # ...okay, not shorter than "wget" or "curl" but with rigth options
-gul="wget -q -c -nD --random-wait --waitretry=3 -T 9 -t 3 --no-check-certificate "
+gul="wget -q -c -nv --random-wait --waitretry=3 -T 9 -t 3 --no-check-certificate "
 # Make Directory full Path
 mdp="mkdir -pv"
 # alias for Apt-Get Install to avoid retyping everytime
@@ -373,9 +373,9 @@ then
 else
     # I should keep that list as small as possible, as I have Ansible
     # playbooks to add and configure some other stuffs when required.
-    for _item in ssh sshpass gnupg-agent pwgen cowsay mtr gpm \
+    for _item in ssh sshpass gnupg-agent pwgen cowsay mtr-tiny gpm \
         ca-certificates cifs-utils smbclient lsb-release rlpr \
-        sl cowsay fortune
+        sl cowsay fortune console-data console-setup console-locales
     do
         _at_t "$_item"
         $agi $_item
